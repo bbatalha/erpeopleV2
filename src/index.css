@@ -1,0 +1,105 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Behavior Report Styles */
+.behavior-trait {
+  @apply relative p-4 bg-gray-50 rounded-lg mb-2;
+}
+
+.behavior-trait-label {
+  @apply flex justify-between text-sm font-medium text-gray-700 mb-2;
+}
+
+.behavior-trait-tendency {
+  @apply text-sm font-medium text-indigo-600 mb-2;
+}
+
+.behavior-trait-slider {
+  @apply relative h-2 mb-2;
+}
+
+.behavior-trait-track {
+  @apply absolute w-full h-2 bg-gradient-to-r from-indigo-200 via-indigo-400 to-indigo-200 top-1/2 transform -translate-y-1/2 rounded-full;
+}
+
+.behavior-trait-dot {
+  @apply absolute w-4 h-4 bg-indigo-600 rounded-full top-1/2 transform -translate-y-1/2 -translate-x-1/2 shadow-md;
+}
+
+.behavior-trait-description {
+  @apply text-sm text-gray-600 mt-4;
+}
+
+/* PDF Mode Styles */
+.pdf-mode {
+  width: 800px !important;
+  margin: 0 !important;
+  padding: 60px 40px !important;
+  background: white !important;
+  font-family: system-ui, -apple-system, sans-serif !important;
+  -webkit-font-smoothing: antialiased !important;
+  -moz-osx-font-smoothing: grayscale !important;
+}
+
+.pdf-mode .behavior-trait {
+  page-break-inside: avoid !important;
+  margin-bottom: 30px !important;
+}
+
+.pdf-mode .behavior-trait-track {
+  height: 4px !important;
+}
+
+.pdf-mode .behavior-trait-dot {
+  width: 20px !important;
+  height: 20px !important;
+}
+
+.pdf-mode .shadow-sm {
+  box-shadow: none !important;
+}
+
+.pdf-mode h1,
+.pdf-mode h2,
+.pdf-mode h3,
+.pdf-mode p,
+.pdf-mode span {
+  color: #000000 !important;
+}
+
+.pdf-mode .download-button {
+  display: none !important;
+}
+
+.pdf-mode .page-break {
+  page-break-before: always !important;
+  margin-top: 40px !important;
+  padding-top: 40px !important;
+  clear: both !important;
+}
+
+.pdf-mode .keep-together {
+  page-break-inside: avoid !important;
+  margin-bottom: 30px !important;
+  padding-bottom: 20px !important;
+}
+
+.pdf-mode .section-title {
+  page-break-before: always !important;
+  margin-top: 40px !important;
+  padding-top: 40px !important;
+}
+
+.pdf-mode .super-powers {
+  page-break-inside: avoid !important;
+  break-inside: avoid !important;
+  margin: 0 !important;
+  padding: 40px 0 !important;
+}
+
+.pdf-mode .print-section li {
+  margin-bottom: 15px !important;
+  line-height: 1.5 !important;
+  font-size: 14px !important;
+}

@@ -45,9 +45,9 @@ export const traitQuestions: Question[] = [
 ]
 
 export const frequencyQuestions: Question[] = [
-  { id: 36, type: 'frequency', trait: 'confrontador' },
-  { id: 37, type: 'frequency', trait: 'competitivo' },
-  { id: 38, type: 'frequency', trait: 'persuasivo' },
-  { id: 39, type: 'frequency', trait: 'workaholic' },
-  { id: 40, type: 'frequency', trait: 'persistente' }
+  { id: 36, type: 'frequency', trait: 'Confrontador' },
+  { id: 37, type: 'frequency', trait: 'Competitivo' },
+  { id: 38, type: 'frequency', trait: 'Persuasivo' },
+  { id: 39, type: 'frequency', trait: 'Workaholic' },
+  { id: 40, type: 'frequency', trait: 'Persistente' }
 ]

@@ -128,7 +128,7 @@ export function BehaviorReport({ results, questions, userName }: BehaviorReportP
   }
   return (
     <div ref={reportRef} id="report-content" className="max-w-[800px] mx-auto bg-white p-8">
-      <div className="bg-white shadow-sm rounded-lg p-8">
+      <div className="bg-white shadow-sm rounded-lg p-8 space-y-12">
         <div className="flex justify-between items-center mb-6">
           {error && (
             <div className="flex items-center text-red-600 text-sm">
@@ -155,20 +155,20 @@ export function BehaviorReport({ results, questions, userName }: BehaviorReportP
           </button>
         </div>
 
-        <div className="text-center mb-16">
+        <div className="text-center mb-12">
           <div className="flex justify-center mb-4">
             <Brain className="w-16 h-16 text-indigo-600" />
           </div>
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
             Traços Comportamentais
           </h1>
-          <p className="text-lg font-medium text-gray-700 mb-2">
+          <p className="text-xl font-medium text-gray-700 mb-2">
             de {userName || '[Nome da Pessoa]'}
           </p>
           <p className="text-base text-gray-600 mb-8">
             Análise realizada em {new Date(results.timeStats?.completedAt || new Date()).toLocaleDateString('pt-BR')}
           </p>
-          <div className="max-w-2xl mx-auto bg-indigo-50 p-6 rounded-lg">
+          <div className="max-w-2xl mx-auto bg-[#F8F9FA] p-8 rounded-lg">
             <h2 className="text-lg font-medium text-gray-900 mb-3">Resumo da Análise</h2>
             <p className="text-gray-700 leading-relaxed">
               Com base na análise realizada, seus principais traços comportamentais incluem tendências para
@@ -266,7 +266,7 @@ export function BehaviorReport({ results, questions, userName }: BehaviorReportP
           <h2 className="text-2xl font-bold text-gray-900 mb-4">
             Frequência dos Traços Comportamentais Identificados
           </h2>
-          <p className="text-gray-600 mb-8">
+          <p className="text-gray-600 mb-6">
             Esta análise mostra a frequência com que você demonstra determinados comportamentos
             em seu ambiente profissional, desde comportamentos raramente manifestados até aqueles
             que são parte constante do seu estilo de trabalho.
@@ -276,26 +276,26 @@ export function BehaviorReport({ results, questions, userName }: BehaviorReportP
               .filter(q => q.type === 'frequency')
               .map(question => {
                 const value = results.frequencies[question.trait!]
-                const position = ((value - 1) / 3) * 100
+                const position = ((value - 1) / 4) * 100
+                
+                const frequencyLabel = frequencyLabels[Math.min(value - 1, 3)]
                 
                 return (
-                  <div key={question.id} className="relative p-2 bg-gray-50 rounded-lg keep-together mb-1">
-                    <div className="mb-4">
-                      <h3 className="text-lg font-medium text-gray-900">{question.trait}</h3>
-                      <p className="text-sm text-gray-700 mt-2">
-                        Frequência atual: <span className="text-indigo-600 font-medium">{frequencyLabels[Math.min(value - 1, 3)]}</span>
-                      </p>
-                    </div>
-                    <div className="relative h-2 flex items-center">
-                      <div className="w-full h-[8px] bg-gradient-to-r from-indigo-200 via-indigo-400 to-indigo-200 rounded-full" />
+                  <div key={question.id} className="bg-gray-50 p-6 rounded-lg mb-6">
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">{question.trait}</h3>
+                    <p className="text-gray-600 mb-4">Frequência atual: {frequencyLabel}</p>
+                    
+                    <div className="relative">
+                      <div className="h-1 bg-gradient-to-r from-indigo-200 via-indigo-400 to-indigo-200 rounded-full" />
                       <div
-                        className="absolute w-[20px] h-[20px] bg-indigo-600 rounded-full top-1/2 transform -translate-y-1/2 -translate-x-1/2 shadow-md"
+                        className="absolute w-4 h-4 bg-indigo-600 rounded-full top-1/2 transform -translate-y-1/2 -translate-x-1/2"
                         style={{ left: `${position}%` }}
                       />
                     </div>
-                    <div className="flex justify-between mt-2 text-xs text-gray-600">
-                      <span>Nunca</span>
-                      <span>Sempre</span>
+                    
+                    <div className="flex justify-between mt-2 text-sm text-gray-600">
+                      <span>Nunca {question.trait.toLowerCase()}</span>
+                      <span>Sempre {question.trait.toLowerCase()}</span>
                     </div>
                   </div>
                 )

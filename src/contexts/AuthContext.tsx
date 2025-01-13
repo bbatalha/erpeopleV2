@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase'
 interface AuthContextType {
   user: User | null
   signIn: (email: string, password: string) => Promise<void>
-  signUp: (email: string, password: string, fullName: string) => Promise<void>
+  signUp: (email: string, password: string, fullName: string, linkedinUrl: string) => Promise<void>
   signOut: () => Promise<void>
 }
 
@@ -38,7 +38,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (error) throw error
   }
 
-  const signUp = async (email: string, password: string, fullName: string) => {
+  const signUp = async (email: string, password: string, fullName: string, linkedinUrl: string) => {
     try {
       const { data, error } = await supabase.auth.signUp({
         email,
@@ -46,6 +46,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         options: {
           data: {
             full_name: fullName,
+            linkedin_url: linkedinUrl,
           },
         },
       })

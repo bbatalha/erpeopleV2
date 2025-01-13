@@ -41,12 +41,12 @@ export function DISCBarChart({ scores }: DISCBarChartProps) {
   ]
 
   return (
-    <div className="w-full" style={{ height: '300px' }}>
+    <div className="w-full h-full min-h-[300px]">
       <ResponsiveContainer width="100%" height="100%">
         <BarChart 
           data={data} 
           margin={{ top: 30, right: 30, left: 20, bottom: 60 }}
-          barSize={60}
+          barSize={80}
         >
           <CartesianGrid strokeDasharray="3 3" />
           <XAxis 
@@ -63,14 +63,16 @@ export function DISCBarChart({ scores }: DISCBarChartProps) {
             padding={{ top: 20 }}
           />
           <RechartsTooltip content={<CustomTooltip />} />
-          <Bar 
-            dataKey="value" 
+          <Bar
+            dataKey="value"
             fill="#4f46e5"
+            radius={[4, 4, 0, 0]}
             label={{
               position: 'top',
               content: ({ value }) => `${value.toFixed(1)}%`,
               fill: '#4f46e5',
-              fontSize: 12
+              fontSize: 12,
+              fontWeight: 500
             }}
           />
         </BarChart>

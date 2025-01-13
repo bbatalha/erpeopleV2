@@ -7,10 +7,29 @@ export function Register() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [fullName, setFullName] = useState('')
+  const [linkedinUrl, setLinkedinUrl] = useState('')
+  const [linkedinError, setLinkedinError] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
   const { signUp } = useAuth()
+
+  const validateLinkedinUrl = (url: string) => {
+    if (!url) {
+      setLinkedinError('LinkedIn URL é obrigatória')
+      return false
+    }
+    if (!url.startsWith('https://www.linkedin.com/')) {
+      setLinkedinError('URL deve começar com https://www.linkedin.com/')
+      return false
+    }
+    if (url.length > 255) {
+      setLinkedinError('URL muito longa')
+      return false
+    }
+    setLinkedinError('')
+    return true
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -21,11 +40,18 @@ export function Register() {
         return
       }
 
+      if (!validateLinkedinUrl(linkedinUrl)) {
+        return
+      }
+
       setError('')
       setLoading(true)
       
+      // Sanitize LinkedIn URL
+      const sanitizedUrl = linkedinUrl.trim().replace(/\/+$/, '')
+
       try {
-        await signUp(email, password, fullName)
+        await signUp(email, password, fullName, sanitizedUrl)
         navigate('/dashboard')
       } catch (err: any) {
         if (err.message?.includes('Database error')) {
@@ -89,6 +115,30 @@ export function Register() {
                 onChange={(e) => setEmail(e.target.value)}
                 className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-indigo-500"
               />
+            </div>
+
+            <div>
+              <label htmlFor="linkedinUrl" className="block text-sm font-medium text-gray-700">
+                LinkedIn URL
+              </label>
+              <input
+                id="linkedinUrl"
+                type="url"
+                required
+                value={linkedinUrl}
+                onChange={(e) => {
+                  setLinkedinUrl(e.target.value)
+                  validateLinkedinUrl(e.target.value)
+                }}
+                placeholder="https://www.linkedin.com/in/seu-perfil"
+                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-indigo-500"
+              />
+              {linkedinError && (
+                <p className="mt-1 text-sm text-red-600">{linkedinError}</p>
+              )}
+              <p className="mt-1 text-xs text-gray-500">
+                Exemplo: https://www.linkedin.com/in/seu-perfil
+              </p>
             </div>
 
             <div>

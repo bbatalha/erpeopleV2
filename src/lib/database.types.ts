@@ -16,6 +16,8 @@ export type Database = {
           full_name: string | null
           company: string | null
           position: string | null
+          linkedin_url: string
+         email: string
           created_at: string
           updated_at: string
         }
@@ -25,6 +27,8 @@ export type Database = {
           full_name?: string | null
           company?: string | null
           position?: string | null
+          linkedin_url: string
+         email: string
           created_at?: string
           updated_at?: string
         }
@@ -34,6 +38,8 @@ export type Database = {
           full_name?: string | null
           company?: string | null
           position?: string | null
+          linkedin_url?: string
+         email?: string
           created_at?: string
           updated_at?: string
         }

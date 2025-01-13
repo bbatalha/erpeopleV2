@@ -23,6 +23,7 @@ export function DISCReport({ userName, results, timeStats }: DISCReportProps) {
   const handleDownload = async () => {
     if (!reportRef.current) return
     
+    console.log('Starting PDF generation for DISC report')
     setDownloading(true)
     setError(null)
     
@@ -43,6 +44,8 @@ export function DISCReport({ userName, results, timeStats }: DISCReportProps) {
           }
         }
       })
+
+      console.log('Canvas captured successfully')
 
       // Create PDF
       const pdf = new jsPDF({
@@ -133,7 +136,9 @@ export function DISCReport({ userName, results, timeStats }: DISCReportProps) {
           </button>
         </div>
 
-        <DISCReportHeader userName={userName} />
+        <div className="page-break keep-together">
+          <DISCReportHeader userName={userName} />
+        </div>
 
         <div className="keep-together">
           <DISCExecutiveSummary
@@ -149,6 +154,131 @@ export function DISCReport({ userName, results, timeStats }: DISCReportProps) {
           </h2>
           <div className="h-80">
             <DISCBarChart scores={results.scores} />
+          </div>
+        </div>
+      
+        <div className="page-break keep-together">
+          <div className="bg-white p-8 rounded-lg shadow-sm">
+            <h2 className="text-2xl font-bold text-gray-900 mb-6">
+              Análise Detalhada do Perfil DISC
+            </h2>
+            
+            <div className="space-y-8">
+              {/* Primary Profile Analysis */}
+              <div>
+                <h3 className="text-xl font-semibold text-gray-900 mb-4">
+                  Perfil Primário: {results.primaryProfile === 'D' ? 'Dominância' :
+                                  results.primaryProfile === 'I' ? 'Influência' :
+                                  results.primaryProfile === 'S' ? 'Estabilidade' :
+                                  'Conformidade'} ({results.scores[results.primaryProfile].toFixed(1)}%)
+                </h3>
+                <div className="bg-indigo-50 p-6 rounded-lg">
+                  <div className="space-y-4">
+                    <div>
+                      <h4 className="font-medium text-indigo-900 mb-2">Manifestação Comportamental</h4>
+                      <p className="text-indigo-800">
+                        {results.primaryProfile === 'D' ? 
+                          'Você demonstra uma forte orientação para resultados e tomada de decisão rápida. Sua abordagem é direta e focada em objetivos.' :
+                        results.primaryProfile === 'I' ?
+                          'Seu estilo é marcado por comunicação expressiva e habilidade natural para influenciar e motivar pessoas. Você traz entusiasmo e energia positiva.' :
+                        results.primaryProfile === 'S' ?
+                          'Você apresenta consistência e confiabilidade em suas ações. Seu foco está em manter harmonia e estabilidade no ambiente.' :
+                          'Sua abordagem é analítica e estruturada. Você prioriza precisão e qualidade em tudo que faz.'}
+                      </p>
+                    </div>
+                    
+                    <div>
+                      <h4 className="font-medium text-indigo-900 mb-2">Pontos Fortes</h4>
+                      <ul className="list-disc list-inside space-y-1 text-indigo-800">
+                        {results.primaryProfile === 'D' ? (
+                          <>
+                            <li>Capacidade de tomar decisões rápidas</li>
+                            <li>Foco em resultados e eficiência</li>
+                            <li>Liderança natural em situações desafiadoras</li>
+                          </>
+                        ) : results.primaryProfile === 'I' ? (
+                          <>
+                            <li>Excelente comunicação e persuasão</li>
+                            <li>Habilidade para motivar equipes</li>
+                            <li>Criatividade e entusiasmo contagiante</li>
+                          </>
+                        ) : results.primaryProfile === 'S' ? (
+                          <>
+                            <li>Lealdade e comprometimento</li>
+                            <li>Excelente trabalho em equipe</li>
+                            <li>Consistência e confiabilidade</li>
+                          </>
+                        ) : (
+                          <>
+                            <li>Atenção aos detalhes e precisão</li>
+                            <li>Pensamento analítico apurado</li>
+                            <li>Foco em qualidade e processos</li>
+                          </>
+                        )}
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Secondary Profile Analysis */}
+              <div>
+                <h3 className="text-xl font-semibold text-gray-900 mb-4">
+                  Perfil Secundário: {results.secondaryProfile === 'D' ? 'Dominância' :
+                                    results.secondaryProfile === 'I' ? 'Influência' :
+                                    results.secondaryProfile === 'S' ? 'Estabilidade' :
+                                    'Conformidade'} ({results.scores[results.secondaryProfile].toFixed(1)}%)
+                </h3>
+                <div className="bg-gray-50 p-6 rounded-lg">
+                  <div className="space-y-4">
+                    <div>
+                      <h4 className="font-medium text-gray-900 mb-2">Influência no Perfil Principal</h4>
+                      <p className="text-gray-800">
+                        {results.primaryProfile === 'D' && results.secondaryProfile === 'I' ?
+                          'A influência complementa sua dominância com habilidades sociais e capacidade de motivar pessoas.' :
+                        results.primaryProfile === 'D' && results.secondaryProfile === 'C' ?
+                          'A conformidade adiciona precisão e análise à sua capacidade de liderança.' :
+                        results.primaryProfile === 'I' && results.secondaryProfile === 'D' ?
+                          'A dominância fortalece sua capacidade de influência com assertividade e foco em resultados.' :
+                        results.primaryProfile === 'I' && results.secondaryProfile === 'S' ?
+                          'A estabilidade traz consistência ao seu estilo comunicativo e influente.' :
+                        results.primaryProfile === 'S' && results.secondaryProfile === 'C' ?
+                          'A conformidade reforça sua estabilidade com atenção aos detalhes e processos.' :
+                        results.primaryProfile === 'S' && results.secondaryProfile === 'I' ?
+                          'A influência adiciona dinamismo ao seu perfil estável e consistente.' :
+                        results.primaryProfile === 'C' && results.secondaryProfile === 'S' ?
+                          'A estabilidade complementa sua precisão com paciência e cooperação.' :
+                          'A combinação destes perfis cria um equilíbrio único entre suas diferentes características.'}
+                      </p>
+                    </div>
+
+                    <div>
+                      <h4 className="font-medium text-gray-900 mb-2">Impacto no Ambiente de Trabalho</h4>
+                      <ul className="list-disc list-inside space-y-1 text-gray-700">
+                        <li>
+                          {results.secondaryProfile === 'D' ? 'Adiciona assertividade e foco em resultados' :
+                           results.secondaryProfile === 'I' ? 'Contribui com habilidades sociais e entusiasmo' :
+                           results.secondaryProfile === 'S' ? 'Traz estabilidade e cooperação à equipe' :
+                           'Agrega precisão e pensamento analítico'}
+                        </li>
+                        <li>
+                          {results.secondaryProfile === 'D' ? 'Fortalece a capacidade de tomada de decisão' :
+                           results.secondaryProfile === 'I' ? 'Melhora a comunicação e engajamento' :
+                           results.secondaryProfile === 'S' ? 'Promove harmonia e trabalho em equipe' :
+                           'Aumenta a qualidade e atenção aos detalhes'}
+                        </li>
+                        <li>
+                          {results.secondaryProfile === 'D' ? 'Impulsiona iniciativas e mudanças' :
+                           results.secondaryProfile === 'I' ? 'Facilita networking e colaboração' :
+                           results.secondaryProfile === 'S' ? 'Fortalece relacionamentos duradouros' :
+                           'Aprimora processos e sistemas'}
+                        </li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 

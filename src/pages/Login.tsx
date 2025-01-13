@@ -14,12 +14,24 @@ export function Login() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
+      if (!email || !password) {
+        setError('Por favor, preencha todos os campos')
+        return
+      }
+
       setError('')
       setLoading(true)
       await signIn(email, password)
       navigate('/dashboard')
-    } catch (err) {
-      setError('Falha ao entrar')
+    } catch (err: any) {
+      console.error('Login error:', err)
+      if (err.message?.includes('Invalid login credentials')) {
+        setError('Email ou senha incorretos')
+      } else if (err.message?.includes('Email not confirmed')) {
+        setError('Por favor, confirme seu email antes de entrar')
+      } else {
+        setError('Erro ao fazer login. Por favor, tente novamente.')
+      }
     } finally {
       setLoading(false)
     }
@@ -83,10 +95,18 @@ export function Login() {
           </form>
 
           <p className="mt-6 text-center text-sm text-gray-600">
-            Não tem uma conta?{' '}
-            <Link to="/register" className="font-medium text-indigo-600 hover:text-indigo-500">
-              Registre-se aqui
-            </Link>
+            <span className="block mb-2">
+              Não tem uma conta?{' '}
+              <Link to="/register" className="font-medium text-indigo-600 hover:text-indigo-500">
+                Registre-se aqui
+              </Link>
+            </span>
+            <span>
+              Esqueceu sua senha?{' '}
+              <Link to="/forgot-password" className="font-medium text-indigo-600 hover:text-indigo-500">
+                Recuperar senha
+              </Link>
+            </span>
           </p>
         </div>
       </div>

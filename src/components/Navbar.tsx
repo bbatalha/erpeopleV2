@@ -1,11 +1,31 @@
 import React from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Brain, LogOut } from 'lucide-react'
+import { Brain, LogOut, Settings } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
+import { supabase } from '../lib/supabase'
 
 export function Navbar() {
   const { user, signOut } = useAuth()
   const navigate = useNavigate()
+  const [isAdmin, setIsAdmin] = React.useState(false)
+
+  React.useEffect(() => {
+    async function checkAdminStatus() {
+      if (!user) return
+
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single()
+
+      if (!error && data) {
+        setIsAdmin(data.role === 'admin')
+      }
+    }
+
+    checkAdminStatus()
+  }, [user])
 
   const handleSignOut = async () => {
     await signOut()
@@ -30,6 +50,15 @@ export function Navbar() {
                 <Link to="/history" className="text-gray-700 hover:text-indigo-600">
                   Histórico
                 </Link>
+                {isAdmin && (
+                  <Link 
+                    to="/admin" 
+                    className="flex items-center space-x-1 text-gray-700 hover:text-indigo-600"
+                  >
+                    <Settings className="w-4 h-4" />
+                    <span>Admin</span>
+                  </Link>
+                )}
                 <button
                   onClick={handleSignOut}
                   className="flex items-center space-x-1 text-gray-700 hover:text-indigo-600"

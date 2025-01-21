@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react'
-import { User } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
+import { User } from '@supabase/supabase-js'
 
 interface AuthContextType {
   user: User | null
@@ -13,55 +13,46 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     // Check active sessions and sets the user
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null)
+      setLoading(false)
     })
 
     // Listen for changes on auth state
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null)
+      setLoading(false)
     })
 
     return () => subscription.unsubscribe()
   }, [])
 
-  const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({
+  const signUp = async (email: string, password: string, fullName: string, linkedinUrl: string) => {
+    const { error } = await supabase.auth.signUp({
       email,
       password,
+      options: {
+        data: {
+          full_name: fullName,
+          linkedin_url: linkedinUrl
+        }
+      }
     })
+
     if (error) throw error
   }
 
-  const signUp = async (email: string, password: string, fullName: string, linkedinUrl: string) => {
-    try {
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            full_name: fullName,
-            linkedin_url: linkedinUrl,
-          },
-        },
-      })
-    
-      if (error) {
-        throw new Error(error.message)
-      }
-      
-      // Wait for the trigger to create the profile
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      
-      return data
-    } catch (err: any) {
-      throw new Error(err.message || 'Erro ao criar conta. Por favor, tente novamente.')
-    }
+  const signIn = async (email: string, password: string) => {
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password
+    })
+
+    if (error) throw error
   }
 
   const signOut = async () => {
@@ -69,9 +60,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (error) throw error
   }
 
+  const value = {
+    user,
+    signIn,
+    signUp,
+    signOut
+  }
+
   return (
-    <AuthContext.Provider value={{ user, signIn, signUp, signOut }}>
-      {children}
+    <AuthContext.Provider value={value}>
+      {!loading && children}
     </AuthContext.Provider>
   )
 }

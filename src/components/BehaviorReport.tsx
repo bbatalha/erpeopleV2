@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react'
 import { Download, Brain } from 'lucide-react'
 import html2canvas from 'html2canvas'
 import { jsPDF } from 'jspdf'
+import { traitQuestions, frequencyQuestions } from '../utils/behaviorQuestions'
 import { getMainTraits, getTraitsSummary, getTraitTendency, getTraitDescription } from '../utils/behaviorUtils'
 
 interface Trait {
@@ -20,7 +21,7 @@ interface BehaviorReportProps {
       completedAt: string
     }
   }
-  questions: Array<{
+  questions?: Array<{
     id: number
     type: 'trait' | 'frequency'
     leftTrait?: string
@@ -30,11 +31,28 @@ interface BehaviorReportProps {
 }
 
 export function BehaviorReport({ results, questions, userName }: BehaviorReportProps) {
+  // Import questions from behaviorQuestions if not provided
+  const allQuestions = questions || [...traitQuestions, ...frequencyQuestions]
+
   const [downloading, setDownloading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const reportRef = useRef<HTMLDivElement>(null)
   const frequencyLabels = ['Nunca', 'Às vezes', 'Frequentemente', 'Sempre']
 
+  // Guard against undefined results
+  if (!results) {
+    return (
+      <div className="max-w-[800px] mx-auto bg-white p-8">
+        <div className="bg-red-50 p-4 rounded-lg">
+          <p className="text-red-600">Error: No results data available</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Ensure we have valid traits and frequencies
+  const traits = results.traits || {}
+  const frequencies = results.frequencies || {}
   const handleDownload = async () => {
     if (!reportRef.current) return
     
@@ -196,9 +214,9 @@ export function BehaviorReport({ results, questions, userName }: BehaviorReportP
 
         <div className="space-y-8">
           <div className="grid grid-cols-1 gap-8">
-              {questions
-                .filter(q => q.type === 'trait')
-                .slice(0, Math.ceil(questions.filter(q => q.type === 'trait').length / 2))
+              {allQuestions
+                ?.filter(q => q.type === 'trait')
+                .slice(0, Math.ceil(allQuestions.filter(q => q.type === 'trait').length / 2))
                 .map(question => {
                   const value = results.traits[question.id]
                   const position = ((value - 1) / 4) * 100
@@ -230,9 +248,9 @@ export function BehaviorReport({ results, questions, userName }: BehaviorReportP
 
         <div className="page-break mt-12">
           <div className="grid grid-cols-1 gap-8">
-              {questions
-                .filter(q => q.type === 'trait')
-                .slice(Math.ceil(questions.filter(q => q.type === 'trait').length / 2))
+              {allQuestions
+                ?.filter(q => q.type === 'trait')
+                .slice(Math.ceil(allQuestions.filter(q => q.type === 'trait').length / 2))
                 .map(question => {
                   const value = results.traits[question.id]
                   const position = ((value - 1) / 4) * 100
@@ -272,8 +290,8 @@ export function BehaviorReport({ results, questions, userName }: BehaviorReportP
             que são parte constante do seu estilo de trabalho.
           </p>
           <div className="grid grid-cols-1 gap-8">
-            {questions
-              .filter(q => q.type === 'frequency')
+            {allQuestions
+              ?.filter(q => q.type === 'frequency')
               .map(question => {
                 const value = results.frequencies[question.trait!]
                 const position = ((value - 1) / 4) * 100

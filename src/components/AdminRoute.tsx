@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
+import { Brain } from 'lucide-react'
 
 interface AdminRouteProps {
   children: React.ReactNode
@@ -14,18 +15,26 @@ export function AdminRoute({ children }: AdminRouteProps) {
 
   useEffect(() => {
     async function checkAdminStatus() {
-      if (!user) return
+      if (!user) {
+        setIsAdmin(false)
+        setLoading(false)
+        return
+      }
 
       try {
+        // Fetch the user's profile with role
         const { data, error } = await supabase
           .from('profiles')
           .select('role, email')
           .eq('id', user.id)
           .single()
 
-        if (error) throw error
+        if (error) {
+          console.error('Error checking admin status:', error)
+          throw error
+        }
         
-        // Double-check admin status
+        // Verify admin status
         const isUserAdmin = data?.role === 'admin'
         setIsAdmin(isUserAdmin)
 
@@ -42,22 +51,10 @@ export function AdminRoute({ children }: AdminRouteProps) {
     checkAdminStatus()
   }, [user])
 
-  // Add loading state with timeout
-  useEffect(() => {
-    const timeout = setTimeout(() => {
-      if (loading) {
-        setLoading(false)
-        setIsAdmin(false)
-      }
-    }, 5000) // 5 second timeout
-
-    return () => clearTimeout(timeout)
-  }, [loading])
-
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-indigo-600"></div>
+        <Brain className="w-8 h-8 text-indigo-600 animate-pulse" />
       </div>
     )
   }

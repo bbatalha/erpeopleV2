@@ -1,26 +1,31 @@
 import React from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Brain, LogOut, Settings } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
+import { Brain, LogOut, Shield } from 'lucide-react'
+import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 
 export function Navbar() {
   const { user, signOut } = useAuth()
   const navigate = useNavigate()
-  const [isAdmin, setIsAdmin] = React.useState(false)
+  const [isAdmin, setIsAdmin] = useState(false)
 
-  React.useEffect(() => {
+  useEffect(() => {
     async function checkAdminStatus() {
       if (!user) return
+      
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', user.id)
+          .single()
 
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', user.id)
-        .single()
-
-      if (!error && data) {
-        setIsAdmin(data.role === 'admin')
+        if (error) throw error
+        setIsAdmin(data?.role === 'admin')
+      } catch (err) {
+        console.error('Error checking admin status:', err)
+        setIsAdmin(false)
       }
     }
 
@@ -28,52 +33,51 @@ export function Navbar() {
   }, [user])
 
   const handleSignOut = async () => {
-    await signOut()
-    navigate('/login')
+    try {
+      await signOut()
+      navigate('/login')
+    } catch (error) {
+      console.error('Error signing out:', error)
+    }
   }
 
   return (
-    <nav className="bg-white shadow-sm">
-      <div className="container mx-auto px-4">
-        <div className="flex items-center justify-between h-16">
-          <Link to="/" className="flex items-center space-x-2">
-            <Brain className="w-8 h-8 text-indigo-600" />
-            <span className="text-xl font-bold text-gray-900">ERPeople</span>
-          </Link>
-          
+    <nav className="bg-white shadow">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex justify-between h-16">
+          <div className="flex">
+            <Link to="/" className="flex items-center">
+              <Brain className="h-8 w-8 text-indigo-600" />
+              <span className="ml-2 text-xl font-bold text-gray-900">ERPeople</span>
+            </Link>
+          </div>
+
           <div className="flex items-center space-x-4">
-            {user ? (
+            {user && (
               <>
-                <Link to="/dashboard" className="text-gray-700 hover:text-indigo-600">
-                  Painel
-                </Link>
-                <Link to="/history" className="text-gray-700 hover:text-indigo-600">
-                  Histórico
-                </Link>
                 {isAdmin && (
-                  <Link 
-                    to="/admin" 
-                    className="flex items-center space-x-1 text-gray-700 hover:text-indigo-600"
+                  <Link
+                    to="/admin"
+                    className="inline-flex items-center text-gray-500 hover:text-gray-700"
                   >
-                    <Settings className="w-4 h-4" />
-                    <span>Admin</span>
+                    <Shield className="w-4 h-4 mr-1" />
+                    Admin
                   </Link>
                 )}
+                <Link
+                  to="/history"
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  History
+                </Link>
                 <button
                   onClick={handleSignOut}
-                  className="flex items-center space-x-1 text-gray-700 hover:text-indigo-600"
+                  className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-gray-500 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                 >
-                  <LogOut className="w-4 h-4" />
-                  <span>Sair</span>
+                  <LogOut className="w-4 h-4 mr-2" />
+                  Sign Out
                 </button>
               </>
-            ) : (
-              <Link
-                to="/login"
-                className="text-gray-700 hover:text-indigo-600"
-              >
-                Entrar
-              </Link>
             )}
           </div>
         </div>

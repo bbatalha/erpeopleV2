@@ -1,51 +1,42 @@
 import React, { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import { Brain, Download } from 'lucide-react'
-import { BehaviorTraitSlider } from '../components/BehaviorTraitSlider'
-import { traitQuestions } from '../utils/behaviorQuestions'
-import { Box, Paper, Typography, Button, Stack, Divider } from '@mui/material'
+import { ArrowLeft, Download, Brain, Search } from 'lucide-react'
+import { BehaviorReport } from '../components/BehaviorReport'
 
 export function UserBehaviorReports() {
   const { userId } = useParams()
   const navigate = useNavigate()
   const [loading, setLoading] = useState(true)
   const [reports, setReports] = useState<any[]>([])
-  const [user, setUser] = useState<any>(null)
+  const [userName, setUserName] = useState('')
+  const [searchTerm, setSearchTerm] = useState('')
 
   useEffect(() => {
     async function fetchReports() {
+      if (!userId) return
+      
+      setLoading(true)
       try {
-        // First verify admin status
-        const { data: adminCheck, error: adminError } = await supabase
+        // Fetch user profile first
+        const { data: profile, error: profileError } = await supabase
           .from('profiles')
-          .select('role')
-          .eq('id', (await supabase.auth.getUser()).data.user?.id)
-          .single()
-
-        if (adminError || adminCheck?.role !== 'admin') {
-          throw new Error('Unauthorized access')
-        }
-
-        // Fetch user details
-        const { data: userData, error: userError } = await supabase
-          .from('profiles')
-          .select('*')
+          .select('full_name')
           .eq('id', userId)
           .single()
 
-        if (userError) throw userError
-        setUser(userData)
+        if (profileError) throw profileError
+        setUserName(profile?.full_name || '')
 
         // Fetch behavior reports
-        const { data: reportsData, error: reportsError } = await supabase
+        const { data, error } = await supabase
           .from('assessment_results')
           .select(`
             *,
-            assessment_responses (
+            assessment_responses!inner (
               responses,
               completed_at,
-              assessments (
+              assessments!inner (
                 type,
                 title
               )
@@ -55,20 +46,27 @@ export function UserBehaviorReports() {
           .eq('assessment_responses.assessments.type', 'behavior')
           .order('created_at', { ascending: false })
 
-        if (reportsError) throw reportsError
-        setReports(reportsData || [])
-      } catch (error) {
-        console.error('Error fetching reports:', error)
-        if (error.message === 'Unauthorized access') {
-          navigate('/dashboard')
-        }
+        if (error) throw error
+        setReports(data || [])
+      } catch (err) {
+        console.error('Error fetching behavior reports:', err)
       } finally {
         setLoading(false)
       }
     }
 
     fetchReports()
-  }, [userId, navigate])
+  }, [userId])
+
+  const filteredReports = reports.filter(report => {
+    const date = new Date(report.created_at).toLocaleDateString()
+    const searchString = `${date}`.toLowerCase()
+    return searchString.includes(searchTerm.toLowerCase())
+  })
+
+  const handleExport = (reportId: string) => {
+    navigate(`/results/${reportId}?action=download`)
+  }
 
   if (loading) {
     return (
@@ -79,80 +77,87 @@ export function UserBehaviorReports() {
   }
 
   return (
-    <Box sx={{ maxWidth: 1200, margin: '0 auto', padding: 3 }}>
-      <Stack direction="row" justifyContent="space-between" alignItems="center" mb={3}>
-        <Typography variant="h4">
-          Relatórios de Traços Comportamentais - {user?.full_name}
-        </Typography>
-        <Button
-          variant="outlined"
+    <div className="max-w-7xl mx-auto px-4 py-8">
+      <div className="flex items-center space-x-4 mb-8">
+        <button 
           onClick={() => navigate('/admin')}
+          className="p-2 hover:bg-gray-100 rounded-full"
         >
-          Voltar para Admin
-        </Button>
-      </Stack>
+          <ArrowLeft />
+        </button>
+        <h1 className="text-2xl font-bold">
+          Behavior Reports: {userName}
+        </h1>
+      </div>
 
-      {reports.length === 0 ? (
-        <Paper sx={{ p: 3, textAlign: 'center' }}>
-          <Typography color="text.secondary">
-            Nenhuma avaliação comportamental concluída ainda
-          </Typography>
-        </Paper>
-      ) : (
-        <Stack spacing={3}>
-          {reports.map((report) => (
-            <Paper key={report.id} sx={{ p: 3 }}>
-              <Stack spacing={2}>
-                <Stack
-                  direction="row"
-                  justifyContent="space-between"
-                  alignItems="center"
-                >
-                  <Typography variant="h6">
-                    Avaliação de{' '}
-                    {new Date(report.created_at).toLocaleDateString('pt-BR', {
-                      day: '2-digit',
-                      month: 'long',
-                      year: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit'
-                    })}
-                  </Typography>
-                  <Button
-                    startIcon={<Download />}
-                    onClick={() => navigate(`/results/${report.id}?action=download`)}
-                  >
-                    Baixar Relatório
-                  </Button>
-                </Stack>
+      <div className="bg-white rounded-lg shadow">
+        <div className="p-6">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-lg font-medium">Total Reports: {reports.length}</h2>
+            <div className="relative">
+              <Search className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 transform -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Search reports..."
+                className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+          </div>
 
-                <Divider />
+          {filteredReports.length === 0 ? (
+            <div className="bg-blue-50 text-blue-700 p-4 rounded-lg">
+              No behavior reports found
+            </div>
+        ) : (
+          <div className="space-y-6">
+            {filteredReports.map((report) => {
+              const date = new Date(report.created_at)
+              
+              return (
+                <div key={report.id} className="bg-gray-50 rounded-lg p-6">
+                  <div className="flex justify-between items-start mb-4">
+                    <div>
+                      <p className="text-gray-900 font-medium">
+                        Submitted on {date.toLocaleDateString('pt-BR', {
+                          day: '2-digit',
+                          month: 'long',
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
+                      </p>
+                    </div>
+                    <div className="flex space-x-3">
+                      <button
+                        onClick={() => navigate(`/results/${report.id}`)}
+                        className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700"
+                      >
+                        View Details
+                      </button>
+                      <button
+                        onClick={() => handleExport(report.id)}
+                        className="inline-flex items-center p-2 border border-gray-300 rounded-md text-gray-700 bg-white hover:bg-gray-50"
+                      >
+                        <Download className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
 
-                <Box sx={{ mt: 2 }}>
-                  {traitQuestions.slice(0, 5).map((question) => (
-                    <Box key={question.id} sx={{ mb: 3 }}>
-                      <BehaviorTraitSlider
-                        leftTrait={question.leftTrait!}
-                        rightTrait={question.rightTrait!}
-                        value={report.results?.traits?.[question.id] || 3}
-                        readOnly
-                      />
-                    </Box>
-                  ))}
-                  {report.results?.traits && Object.keys(report.results.traits).length > 5 && (
-                    <Button
-                      onClick={() => navigate(`/results/${report.id}`)}
-                      variant="text"
-                    >
-                      Ver Relatório Completo
-                    </Button>
-                  )}
-                </Box>
-              </Stack>
-            </Paper>
-          ))}
-        </Stack>
-      )}
-    </Box>
+                  <div className="mt-4">
+                    <BehaviorReport
+                      userName={userName}
+                      results={report.results}
+                      timeStats={report.assessment_responses?.responses?.timeStats}
+                    />
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+        </div>
+      </div>
+    </div>
   )
 }

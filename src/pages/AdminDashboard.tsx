@@ -23,17 +23,12 @@ import {
 import { DataGrid, GridColDef } from '@mui/x-data-grid'
 import { useAuth } from '../contexts/AuthContext'
 import { useNavigate } from 'react-router-dom'
-import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns'
-import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers'
 import { UserEditDialog } from '../components/UserEditDialog'
 import { UserRoleDialog } from '../components/UserRoleDialog'
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts'
-import { calculateDISCResults } from '../utils/discCalculator'
 
 interface Stats {
   totalUsers: number;
   totalAssessments: number;
-  activeUsers: number;
 }
 
 export function AdminDashboard() {
@@ -55,35 +50,41 @@ export function AdminDashboard() {
   const [fetchUsers, setFetchUsers] = useState(0)
   const [stats, setStats] = useState<Stats>({
     totalUsers: 0,
-    totalAssessments: 0,
-    activeUsers: 0
+    totalAssessments: 0
   })
 
   // Fetch stats
   useEffect(() => {
     async function fetchStats() {
       try {
-        // Get total users (including admins)
-        const { data: usersData, error: usersError } = await supabase
-          .from('profiles')
-          .select('id, role')
+        // Get total users and assessments in parallel
+        const [usersResult, assessmentsResult] = await Promise.all([
+          supabase
+            .from('profiles')
+            .select('id, role'),
+          supabase
+            .from('assessment_responses')
+            .select(`
+              id,
+              status,
+              user_id,
+              assessments!inner (
+                type
+              )
+            `)
+            .eq('status', 'completed')
+        ])
 
-        if (usersError) throw usersError
-        const totalUsers = usersData?.length || 0
-
-        // Get total completed assessments
-        const { data: assessmentsData, error: assessmentsError } = await supabase
-          .from('assessment_responses')
-          .select('id')
-          .eq('status', 'completed')
-
-        if (assessmentsError) throw assessmentsError
-        const totalAssessments = assessmentsData?.length || 0
+        if (usersResult.error) throw usersResult.error
+        if (assessmentsResult.error) throw assessmentsResult.error
 
         setStats({
-          totalUsers,
-          totalAssessments
+          totalUsers: usersResult.data?.length || 0,
+          totalAssessments: assessmentsResult.data?.length || 0
         })
+
+        console.log('Total assessments:', assessmentsResult.data?.length)
+        console.log('Assessment data:', assessmentsResult.data)
       } catch (error) {
         console.error('Error fetching stats:', error)
         setStats({
@@ -104,10 +105,22 @@ export function AdminDashboard() {
       try {
         const { data, error } = await supabase
           .from('profiles')
-          .select('*')
+          .select(`
+            *,
+            assessment_responses (
+              id,
+              status,
+              created_at,
+              assessments!inner (
+                type,
+                title
+              )
+            )
+          `)
           .order('created_at', { ascending: false })
 
         if (error) throw error
+        console.log('Users with assessments:', data)
         setUsers(data || [])
       } catch (err) {
         console.error('Error fetching users:', err)
@@ -264,10 +277,10 @@ export function AdminDashboard() {
           <Grid item xs={12} sm={4}>
             <Paper sx={{ p: 3 }}>
               <Stack direction="row" spacing={2} alignItems="center">
-                <FileText className="w-8 h-8 text-indigo-600" />
+                <Brain className="w-8 h-8 text-indigo-600" />
                 <Box>
                   <Typography variant="h6">{stats.totalAssessments}</Typography>
-                  <Typography color="text.secondary">Total Assessments</Typography>
+                  <Typography color="text.secondary">Completed Assessments</Typography>
                 </Box>
               </Stack>
             </Paper>

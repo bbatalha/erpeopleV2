@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react'
+import React, { useRef, useState, useMemo } from 'react'
 import { Download } from 'lucide-react'
 import html2canvas from 'html2canvas'
 import { jsPDF } from 'jspdf'
@@ -6,19 +6,56 @@ import { DISCBarChart } from './DISCBarChart'
 import { DISCReportHeader } from './DISCReportHeader'
 import { DISCExecutiveSummary } from './DISCExecutiveSummary'
 import { DISCSuperPowers } from './DISCSuperPowers'
+import { calculateDISCResults } from '../utils/discCalculator'
 
 interface DISCReportProps {
   userName: string
   results: any
+  answers?: Record<number, 'D' | 'I' | 'S' | 'C'>
   timeStats?: {
     completedAt: string
   }
 }
 
-export function DISCReport({ userName, results, timeStats }: DISCReportProps) {
+export function DISCReport({ userName, results, answers, timeStats }: DISCReportProps) {
   const [downloading, setDownloading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const reportRef = useRef<HTMLDivElement>(null)
+
+  // Calculate scores from answers if results are not available
+  const calculatedResults = useMemo(() => {
+    if (answers) {
+      return calculateDISCResults(answers)
+    }
+    return null
+  }, [answers])
+
+  // Use provided results or calculated results
+  const finalResults = results || calculatedResults
+
+  // Guard against missing data
+  if (!finalResults) {
+    return (
+      <div className="max-w-[800px] mx-auto bg-white p-8">
+        <div className="bg-red-50 p-4 rounded-lg">
+          <p className="text-red-600">Error: Invalid or missing results data</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Extract primary and secondary profiles after validation
+  const primaryProfile = finalResults.primaryProfile || 'D'
+  const secondaryProfile = finalResults.secondaryProfile || 'I'
+
+  // Ensure we have valid scores
+  const scores = {
+    D: Number(finalResults.scores.D) || 0,
+    I: Number(finalResults.scores.I) || 0,
+    S: Number(finalResults.scores.S) || 0,
+    C: Number(finalResults.scores.C) || 0
+  }
+
 
   const handleDownload = async () => {
     if (!reportRef.current) return
@@ -143,8 +180,8 @@ export function DISCReport({ userName, results, timeStats }: DISCReportProps) {
         <div className="keep-together">
           <DISCExecutiveSummary
             userName={userName}
-            primaryProfile={results.primaryProfile}
-            secondaryProfile={results.secondaryProfile}
+            primaryProfile={primaryProfile}
+            secondaryProfile={secondaryProfile}
           />
         </div>
 
@@ -153,7 +190,7 @@ export function DISCReport({ userName, results, timeStats }: DISCReportProps) {
             Seu Perfil em Números
           </h2>
           <div className="h-80">
-            <DISCBarChart scores={results.scores} />
+            <DISCBarChart scores={scores} />
           </div>
         </div>
       
@@ -168,20 +205,20 @@ export function DISCReport({ userName, results, timeStats }: DISCReportProps) {
               <div>
                 <h3 className="text-xl font-semibold text-gray-900 mb-4">
                   Perfil Primário: {results.primaryProfile === 'D' ? 'Dominância' :
-                                  results.primaryProfile === 'I' ? 'Influência' :
-                                  results.primaryProfile === 'S' ? 'Estabilidade' :
-                                  'Conformidade'} ({results.scores[results.primaryProfile].toFixed(1)}%)
+                                  primaryProfile === 'I' ? 'Influência' :
+                                  primaryProfile === 'S' ? 'Estabilidade' :
+                                  'Conformidade'} ({scores[primaryProfile as keyof typeof scores].toFixed(1)}%)
                 </h3>
                 <div className="bg-indigo-50 p-6 rounded-lg">
                   <div className="space-y-4">
                     <div>
                       <h4 className="font-medium text-indigo-900 mb-2">Manifestação Comportamental</h4>
                       <p className="text-indigo-800">
-                        {results.primaryProfile === 'D' ? 
+                        {primaryProfile === 'D' ? 
                           'Você demonstra uma forte orientação para resultados e tomada de decisão rápida. Sua abordagem é direta e focada em objetivos.' :
-                        results.primaryProfile === 'I' ?
+                        primaryProfile === 'I' ?
                           'Seu estilo é marcado por comunicação expressiva e habilidade natural para influenciar e motivar pessoas. Você traz entusiasmo e energia positiva.' :
-                        results.primaryProfile === 'S' ?
+                        primaryProfile === 'S' ?
                           'Você apresenta consistência e confiabilidade em suas ações. Seu foco está em manter harmonia e estabilidade no ambiente.' :
                           'Sua abordagem é analítica e estruturada. Você prioriza precisão e qualidade em tudo que faz.'}
                       </p>
@@ -190,19 +227,19 @@ export function DISCReport({ userName, results, timeStats }: DISCReportProps) {
                     <div>
                       <h4 className="font-medium text-indigo-900 mb-2">Pontos Fortes</h4>
                       <ul className="list-disc list-inside space-y-1 text-indigo-800">
-                        {results.primaryProfile === 'D' ? (
+                        {primaryProfile === 'D' ? (
                           <>
                             <li>Capacidade de tomar decisões rápidas</li>
                             <li>Foco em resultados e eficiência</li>
                             <li>Liderança natural em situações desafiadoras</li>
                           </>
-                        ) : results.primaryProfile === 'I' ? (
+                        ) : primaryProfile === 'I' ? (
                           <>
                             <li>Excelente comunicação e persuasão</li>
                             <li>Habilidade para motivar equipes</li>
                             <li>Criatividade e entusiasmo contagiante</li>
                           </>
-                        ) : results.primaryProfile === 'S' ? (
+                        ) : primaryProfile === 'S' ? (
                           <>
                             <li>Lealdade e comprometimento</li>
                             <li>Excelente trabalho em equipe</li>
@@ -224,29 +261,29 @@ export function DISCReport({ userName, results, timeStats }: DISCReportProps) {
               {/* Secondary Profile Analysis */}
               <div>
                 <h3 className="text-xl font-semibold text-gray-900 mb-4">
-                  Perfil Secundário: {results.secondaryProfile === 'D' ? 'Dominância' :
-                                    results.secondaryProfile === 'I' ? 'Influência' :
-                                    results.secondaryProfile === 'S' ? 'Estabilidade' :
-                                    'Conformidade'} ({results.scores[results.secondaryProfile].toFixed(1)}%)
+                  Perfil Secundário: {secondaryProfile === 'D' ? 'Dominância' :
+                                    secondaryProfile === 'I' ? 'Influência' :
+                                    secondaryProfile === 'S' ? 'Estabilidade' :
+                                    'Conformidade'} ({scores[secondaryProfile as keyof typeof scores].toFixed(1)}%)
                 </h3>
                 <div className="bg-gray-50 p-6 rounded-lg">
                   <div className="space-y-4">
                     <div>
                       <h4 className="font-medium text-gray-900 mb-2">Influência no Perfil Principal</h4>
                       <p className="text-gray-800">
-                        {results.primaryProfile === 'D' && results.secondaryProfile === 'I' ?
+                        {primaryProfile === 'D' && secondaryProfile === 'I' ?
                           'A influência complementa sua dominância com habilidades sociais e capacidade de motivar pessoas.' :
-                        results.primaryProfile === 'D' && results.secondaryProfile === 'C' ?
+                        primaryProfile === 'D' && secondaryProfile === 'C' ?
                           'A conformidade adiciona precisão e análise à sua capacidade de liderança.' :
-                        results.primaryProfile === 'I' && results.secondaryProfile === 'D' ?
+                        primaryProfile === 'I' && secondaryProfile === 'D' ?
                           'A dominância fortalece sua capacidade de influência com assertividade e foco em resultados.' :
-                        results.primaryProfile === 'I' && results.secondaryProfile === 'S' ?
+                        primaryProfile === 'I' && secondaryProfile === 'S' ?
                           'A estabilidade traz consistência ao seu estilo comunicativo e influente.' :
-                        results.primaryProfile === 'S' && results.secondaryProfile === 'C' ?
+                        primaryProfile === 'S' && secondaryProfile === 'C' ?
                           'A conformidade reforça sua estabilidade com atenção aos detalhes e processos.' :
-                        results.primaryProfile === 'S' && results.secondaryProfile === 'I' ?
+                        primaryProfile === 'S' && secondaryProfile === 'I' ?
                           'A influência adiciona dinamismo ao seu perfil estável e consistente.' :
-                        results.primaryProfile === 'C' && results.secondaryProfile === 'S' ?
+                        primaryProfile === 'C' && secondaryProfile === 'S' ?
                           'A estabilidade complementa sua precisão com paciência e cooperação.' :
                           'A combinação destes perfis cria um equilíbrio único entre suas diferentes características.'}
                       </p>
@@ -283,7 +320,7 @@ export function DISCReport({ userName, results, timeStats }: DISCReportProps) {
         </div>
 
         <div className="page-break keep-together">
-          <DISCSuperPowers profile={results.primaryProfile} />
+          <DISCSuperPowers profile={primaryProfile} />
         </div>
 
         <div className="section-title keep-together">

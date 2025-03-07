@@ -34,6 +34,9 @@ export function Register() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
+      setLoading(true)
+      setError('')
+
       // Validate password length
       if (password.length < 6) {
         setError('A senha deve ter pelo menos 6 caracteres')
@@ -44,14 +47,23 @@ export function Register() {
         return
       }
 
-      setError('')
-      setLoading(true)
-      
       // Sanitize LinkedIn URL
       const sanitizedUrl = linkedinUrl.trim().replace(/\/+$/, '')
 
       try {
         await signUp(email, password, fullName, sanitizedUrl)
+        setError('')
+        
+        // Show success message
+        const successMessage = document.createElement('div')
+        successMessage.className = 'fixed bottom-4 right-4 bg-green-50 text-green-800 p-4 rounded-lg shadow-lg'
+        successMessage.innerHTML = `
+          <p class="font-medium">Registration successful!</p>
+          <p class="text-sm">We're setting up your profile with LinkedIn data...</p>
+        `
+        document.body.appendChild(successMessage)
+        setTimeout(() => successMessage.remove(), 5000)
+
         navigate('/dashboard')
       } catch (err: any) {
         if (err.message?.includes('Database error')) {

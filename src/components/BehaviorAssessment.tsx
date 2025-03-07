@@ -141,6 +141,36 @@ export function BehaviorAssessment() {
       const assessmentId = await getAssessmentId()
       if (!assessmentId) throw new Error('Assessment ID not found')
 
+      // Process the answers into separate traits and frequencies collections
+      const traits: Record<number, number> = {}
+      const frequencies: Record<string, number> = {}
+      
+      // Process trait questions (1-35)
+      for (const q of traitQuestions) {
+        if (answers[q.id]) {
+          traits[q.id] = answers[q.id]
+        }
+      }
+      
+      // Process frequency questions (36-40)
+      for (const q of frequencyQuestions) {
+        if (answers[q.id] && q.trait) {
+          frequencies[q.trait] = answers[q.id]
+        }
+      }
+      
+      // Calculate results
+      const results = {
+        traits,
+        frequencies,
+        timeStats: {
+          totalTime: Date.now() - startTime,
+          completedAt: new Date().toISOString()
+        }
+      }
+      
+      console.log("Submitting behavior assessment results:", results);
+
       // First, create the completed response
       const { data: responseData, error: responseError } = await supabase
         .from('assessment_responses')
@@ -150,6 +180,7 @@ export function BehaviorAssessment() {
           status: 'completed',
           responses: {
             answers,
+            questions, // Include the questions for reference
             timeStats: {
               totalTime: Date.now() - startTime,
               completedAt: new Date().toISOString()
@@ -162,8 +193,7 @@ export function BehaviorAssessment() {
 
       if (responseError) throw responseError
 
-      // Then calculate and store results
-      const results = calculateResults(answers)
+      // Then store results
       const { data: resultData, error: resultError } = await supabase
         .from('assessment_results')
         .insert({
@@ -195,27 +225,6 @@ export function BehaviorAssessment() {
     : isLastQuestion 
       ? 'Concluir' 
       : 'Próxima'
-
-  const calculateResults = (answers: Record<number, number>) => {
-    // Calculate trait scores
-    const traitScores = traitQuestions.reduce((acc, q) => {
-      const score = answers[q.id] || 0
-      acc[q.id] = score
-      return acc
-    }, {} as Record<number, number>)
-
-    // Calculate frequency scores
-    const frequencyScores = frequencyQuestions.reduce((acc, q) => {
-      const score = answers[q.id] || 0
-      acc[q.trait!] = score
-      return acc
-    }, {} as Record<string, number>)
-
-    return {
-      traits: traitScores,
-      frequencies: frequencyScores
-    }
-  }
 
   const progress = (Object.keys(answers).length / questions.length) * 100
 

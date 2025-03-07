@@ -1,6 +1,12 @@
 import React, { createContext, useContext, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { User } from '@supabase/supabase-js'
+import { fetchLinkedInProfile, updateUserProfile } from '../lib/linkedinProfileFetcher'
+
+interface AuthError {
+  message: string
+  __isAuthError?: boolean
+}
 
 interface AuthContextType {
   user: User | null
@@ -32,7 +38,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const signUp = async (email: string, password: string, fullName: string, linkedinUrl: string) => {
-    const { error } = await supabase.auth.signUp({
+    const { data: authData, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
@@ -44,20 +50,50 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     })
 
     if (error) throw error
+    
+    // Start LinkedIn profile fetch in background
+    if (authData.user) {
+      fetchLinkedInProfile(linkedinUrl).then(profile => {
+        if (profile) {
+          updateUserProfile(authData.user.id, profile)
+        }
+      })
+    }
   }
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password
-    })
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      })
 
-    if (error) throw error
+      if (error) {
+        console.error('Login error:', error)
+        throw error
+      }
+
+      // Verify session was created
+      if (!data.session) {
+        throw new Error('No session created')
+      }
+    } catch (err) {
+      const authError = err as AuthError
+      if (authError.__isAuthError) {
+        throw new Error('Invalid login credentials')
+      }
+      throw err
+    }
   }
 
   const signOut = async () => {
-    const { error } = await supabase.auth.signOut()
-    if (error) throw error
+    try {
+      const { error } = await supabase.auth.signOut()
+      if (error) throw error
+    } catch (err) {
+      console.error('Error signing out:', err)
+      throw err
+    }
   }
 
   const value = {

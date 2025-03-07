@@ -193,7 +193,47 @@ export function History() {
       <div className="bg-white shadow overflow-hidden rounded-lg">
         <ul role="list" className="divide-y divide-gray-200">
           {filteredAssessments.map((assessment) => {
-            const date = new Date(assessment.created_at)            
+            const date = new Date(assessment.created_at)
+            
+            // For DISC assessments, process the data consistently 
+            let scores = { D: 0, I: 0, S: 0, C: 0 };
+            if (assessment.assessments?.type === 'disc') {
+              // First check if results already has scores object
+              if (assessment.results?.scores) {
+                scores = {
+                  D: Number(assessment.results.scores.D) || 0,
+                  I: Number(assessment.results.scores.I) || 0,
+                  S: Number(assessment.results.scores.S) || 0,
+                  C: Number(assessment.results.scores.C) || 0
+                };
+              } 
+              // Next check if results has direct DISC properties
+              else if (assessment.results && ('D' in assessment.results || 'I' in assessment.results || 'S' in assessment.results || 'C' in assessment.results)) {
+                scores = {
+                  D: Number(assessment.results.D) || 0,
+                  I: Number(assessment.results.I) || 0,
+                  S: Number(assessment.results.S) || 0,
+                  C: Number(assessment.results.C) || 0
+                };
+              } 
+              // Finally calculate from answers if available
+              else if (assessment.assessment_responses?.responses?.answers) {
+                scores = calculateDISCResults(assessment.assessment_responses.responses.answers).scores;
+              }
+              
+              // Normalize scores to ensure they sum to 100%
+              const sum = scores.D + scores.I + scores.S + scores.C;
+              if (sum > 0 && Math.abs(sum - 100) > 0.1) {
+                const factor = 100 / sum;
+                scores.D *= factor;
+                scores.I *= factor;
+                scores.S *= factor;
+                scores.C *= factor;
+                
+                console.log(`Normalized scores: D=${scores.D.toFixed(1)}, I=${scores.I.toFixed(1)}, S=${scores.S.toFixed(1)}, C=${scores.C.toFixed(1)}, Sum=${(scores.D + scores.I + scores.S + scores.C).toFixed(1)}`);
+              }
+            }
+            
             return (
               <li key={assessment.id} className={`px-4 sm:px-6 ${
                 assessment.assessments?.type === 'behavior' 
@@ -258,9 +298,9 @@ export function History() {
                 </div>
                 {assessment.assessments?.type === 'disc' && (
                   <div className="mt-6">
-                  <div className="h-64">
-                    <DISCBarChart scores={calculateDISCResults(assessment.assessment_responses?.responses?.answers || {}).scores} />
-                  </div>
+                    <div className="h-64">
+                      <DISCBarChart scores={scores} />
+                    </div>
                   </div>
                 )}
               </li>

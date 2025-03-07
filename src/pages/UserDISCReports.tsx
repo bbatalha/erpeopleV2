@@ -135,7 +135,7 @@ export function UserDISCReports() {
               const date = new Date(report.created_at)
               
               return (
-                <Paper key={report.id} elevation={0} sx={{ p: 3, bgcolor: 'grey.50' }}>
+                <Paper key={report.id} elevation={0} sx={{ p: 3, bgcolor: 'rgb(235, 244, 255)' }}>
                   <Stack direction="row" justifyContent="space-between" alignItems="start" mb={2}>
                     <div>
                       <Typography variant="subtitle1" gutterBottom>
@@ -178,7 +178,7 @@ export function UserDISCReports() {
                     </Stack>
                   </Stack>
 
-                  <Box sx={{ height: 200 }}>
+                  <Box sx={{ height: 300, bgcolor: 'white', borderRadius: '8px', overflow: 'hidden', border: '1px solid #e5e7eb' }}>
                     <DISCBarChart scores={scores.scores} />
                   </Box>
                 </Paper>

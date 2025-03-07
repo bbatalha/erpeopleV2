@@ -33,11 +33,35 @@ export function calculateDISCResults(responses: Record<number, 'D' | 'I' | 'S' |
 
   // Calculate percentages
   const totalQuestions = Object.keys(responses).length
+  const totalResponses = counts.D + counts.I + counts.S + counts.C
+  
+  // Ensure we're not dividing by zero
+  if (totalResponses === 0) {
+    return {
+      scores: { D: 25, I: 25, S: 25, C: 25 },
+      primaryProfile: 'D',
+      secondaryProfile: 'I',
+      intensity: { D: 'Moderada', I: 'Moderada', S: 'Moderada', C: 'Moderada' }
+    }
+  }
+  
+  // Normalize to ensure the values sum to 100%
   const scores = {
-    D: (counts.D / totalQuestions) * 100,
-    I: (counts.I / totalQuestions) * 100,
-    S: (counts.S / totalQuestions) * 100,
-    C: (counts.C / totalQuestions) * 100
+    D: (counts.D / totalResponses) * 100,
+    I: (counts.I / totalResponses) * 100,
+    S: (counts.S / totalResponses) * 100,
+    C: (counts.C / totalResponses) * 100
+  }
+  
+  // Verify the sum is 100% (with floating point tolerance)
+  const sum = scores.D + scores.I + scores.S + scores.C
+  if (Math.abs(sum - 100) > 0.1) {
+    console.warn(`DISC scores sum (${sum.toFixed(2)}) is not 100%. Normalizing values.`);
+    const factor = 100 / sum;
+    scores.D *= factor;
+    scores.I *= factor;
+    scores.S *= factor;
+    scores.C *= factor;
   }
 
   // Determine primary and secondary profiles

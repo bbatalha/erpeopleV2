@@ -148,4 +148,200 @@ export type Database = {
       }
     }
   }
+  Tables: {
+    companies: {
+      Row: {
+        id: string
+        name: string
+        domain: string
+        industry: string
+        employee_range: string
+        linkedin_url: string
+        logo_url: string
+        website: string
+        year_founded: number
+        description: string
+        hq_city: string
+        hq_country: string
+        hq_region: string
+        created_at: string
+        updated_at: string
+      }
+      Insert: {
+        id?: string
+        name: string
+        domain: string
+        industry?: string
+        employee_range?: string
+        linkedin_url?: string
+        logo_url?: string
+        website?: string
+        year_founded?: number
+        description?: string
+        hq_city?: string
+        hq_country?: string
+        hq_region?: string
+        created_at?: string
+        updated_at?: string
+      }
+      Update: {
+        id?: string
+        name?: string
+        domain?: string
+        industry?: string
+        employee_range?: string
+        linkedin_url?: string
+        logo_url?: string
+        website?: string
+        year_founded?: number
+        description?: string
+        hq_city?: string
+        hq_country?: string
+        hq_region?: string
+        created_at?: string
+        updated_at?: string
+      }
+    }
+    education: {
+      Row: {
+        id: string
+        user_id: string
+        degree: string
+        field_of_study: string
+        school: string
+        school_linkedin_url: string
+        school_logo_url: string
+        date_range: string
+        start_month: string
+        start_year: number
+        end_month: string
+        end_year: number
+        activities: string
+        created_at: string
+        updated_at: string
+      }
+      Insert: {
+        id?: string
+        user_id: string
+        degree: string
+        field_of_study: string
+        school: string
+        school_linkedin_url?: string
+        school_logo_url?: string
+        date_range?: string
+        start_month?: string
+        start_year?: number
+        end_month?: string
+        end_year?: number
+        activities?: string
+        created_at?: string
+        updated_at?: string
+      }
+      Update: {
+        id?: string
+        user_id?: string
+        degree?: string
+        field_of_study?: string
+        school?: string
+        school_linkedin_url?: string
+        school_logo_url?: string
+        date_range?: string
+        start_month?: string
+        start_year?: number
+        end_month?: string
+        end_year?: number
+        activities?: string
+        created_at?: string
+        updated_at?: string
+      }
+    }
+    experience: {
+      Row: {
+        id: string
+        user_id: string
+        company_name: string
+        company_logo_url: string
+        job_title: string
+        start_month: number
+        start_year: number
+        end_month: string
+        end_year: string
+        is_current: boolean
+        description: string
+        location: string
+        skills: string
+        job_type: string
+        duration: string
+        created_at: string
+        updated_at: string
+      }
+      Insert: {
+        id?: string
+        user_id: string
+        company_name: string
+        company_logo_url?: string
+        job_title: string
+        start_month: number
+        start_year: number
+        end_month?: string
+        end_year?: string
+        is_current?: boolean
+        description?: string
+        location?: string
+        skills?: string
+        job_type?: string
+        duration?: string
+        created_at?: string
+        updated_at?: string
+      }
+      Update: {
+        id?: string
+        user_id?: string
+        company_name?: string
+        company_logo_url?: string
+        job_title?: string
+        start_month?: number
+        start_year?: number
+        end_month?: string
+        end_year?: string
+        is_current?: boolean
+        description?: string
+        location?: string
+        skills?: string
+        job_type?: string
+        duration?: string
+        created_at?: string
+        updated_at?: string
+      }
+    }
+    webhook_logs: {
+      Row: {
+        id: string
+        webhook_type: string
+        user_id: string
+        request_data: Json
+        status: string
+        error_message: string
+        created_at: string
+      }
+      Insert: {
+        id?: string
+        webhook_type: string
+        user_id?: string
+        request_data: Json
+        status: string
+        error_message?: string
+        created_at?: string
+      }
+      Update: {
+        id?: string
+        webhook_type?: string
+        user_id?: string
+        request_data?: Json
+        status?: string
+        error_message?: string
+        created_at?: string
+      }
+    }
+  }
 }

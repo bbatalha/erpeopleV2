@@ -31,31 +31,73 @@ export function DISCReport({ userName, results, answers, timeStats }: DISCReport
   }, [answers])
 
   // Use provided results or calculated results
-  const finalResults = results || calculatedResults
-
-  // Guard against missing data
-  if (!finalResults) {
-    return (
-      <div className="max-w-[800px] mx-auto bg-white p-8">
-        <div className="bg-red-50 p-4 rounded-lg">
-          <p className="text-red-600">Error: Invalid or missing results data</p>
-        </div>
-      </div>
-    )
-  }
+  const finalResults = useMemo(() => {
+    if (!results && !calculatedResults) {
+      return {
+        scores: { D: 25, I: 25, S: 25, C: 25 },
+        primaryProfile: 'D',
+        secondaryProfile: 'I'
+      }
+    }
+    return results || calculatedResults
+  }, [results, calculatedResults])
 
   // Extract primary and secondary profiles after validation
-  const primaryProfile = finalResults.primaryProfile || 'D'
-  const secondaryProfile = finalResults.secondaryProfile || 'I'
+  const primaryProfile = finalResults?.primaryProfile || 'D'
+  const secondaryProfile = finalResults?.secondaryProfile || 'I'
 
-  // Ensure we have valid scores
-  const scores = {
-    D: Number(finalResults.scores.D) || 0,
-    I: Number(finalResults.scores.I) || 0,
-    S: Number(finalResults.scores.S) || 0,
-    C: Number(finalResults.scores.C) || 0
-  }
+  // Ensure we have valid scores and normalize to 100%
+  const scores = useMemo(() => {
+    let normalized = { D: 0, I: 0, S: 0, C: 0 };
+    
+    // If finalResults already has proper scores object
+    if (finalResults?.scores && typeof finalResults.scores === 'object') {
+      normalized = {
+        D: Number(finalResults.scores.D) || 0,
+        I: Number(finalResults.scores.I) || 0,
+        S: Number(finalResults.scores.S) || 0,
+        C: Number(finalResults.scores.C) || 0
+      }
+    }
+    // If finalResults directly has the D, I, S, C properties
+    else if (finalResults && typeof finalResults === 'object' && 
+        ('D' in finalResults || 'I' in finalResults || 'S' in finalResults || 'C' in finalResults)) {
+      normalized = {
+        D: Number(finalResults.D) || 0,
+        I: Number(finalResults.I) || 0, 
+        S: Number(finalResults.S) || 0,
+        C: Number(finalResults.C) || 0
+      }
+    }
+    
+    // Normalize to ensure sum is 100%
+    const sum = normalized.D + normalized.I + normalized.S + normalized.C;
+    
+    // If sum is close to zero or invalid, return equal distribution
+    if (sum < 0.1) {
+      return { D: 25, I: 25, S: 25, C: 25 };
+    }
+    
+    // Normalize to 100%
+    if (Math.abs(sum - 100) > 0.1) {
+      const factor = 100 / sum;
+      normalized.D = normalized.D * factor;
+      normalized.I = normalized.I * factor;
+      normalized.S = normalized.S * factor;
+      normalized.C = normalized.C * factor;
+    }
+    
+    return normalized;
+  }, [finalResults]);
 
+  // Debug information
+  console.log('DISC Report Data:', {
+    receivedResults: results,
+    calculatedResults,
+    finalResults,
+    scores,
+    sum: scores.D + scores.I + scores.S + scores.C
+  })
 
   const handleDownload = async () => {
     if (!reportRef.current) return
@@ -182,6 +224,7 @@ export function DISCReport({ userName, results, answers, timeStats }: DISCReport
             userName={userName}
             primaryProfile={primaryProfile}
             secondaryProfile={secondaryProfile}
+            totalTime={timeStats?.completedAt ? 0 : 0}
           />
         </div>
 
@@ -204,7 +247,7 @@ export function DISCReport({ userName, results, answers, timeStats }: DISCReport
               {/* Primary Profile Analysis */}
               <div>
                 <h3 className="text-xl font-semibold text-gray-900 mb-4">
-                  Perfil Primário: {results.primaryProfile === 'D' ? 'Dominância' :
+                  Perfil Primário: {primaryProfile === 'D' ? 'Dominância' :
                                   primaryProfile === 'I' ? 'Influência' :
                                   primaryProfile === 'S' ? 'Estabilidade' :
                                   'Conformidade'} ({scores[primaryProfile as keyof typeof scores].toFixed(1)}%)
@@ -293,21 +336,21 @@ export function DISCReport({ userName, results, answers, timeStats }: DISCReport
                       <h4 className="font-medium text-gray-900 mb-2">Impacto no Ambiente de Trabalho</h4>
                       <ul className="list-disc list-inside space-y-1 text-gray-700">
                         <li>
-                          {results.secondaryProfile === 'D' ? 'Adiciona assertividade e foco em resultados' :
-                           results.secondaryProfile === 'I' ? 'Contribui com habilidades sociais e entusiasmo' :
-                           results.secondaryProfile === 'S' ? 'Traz estabilidade e cooperação à equipe' :
+                          {secondaryProfile === 'D' ? 'Adiciona assertividade e foco em resultados' :
+                           secondaryProfile === 'I' ? 'Contribui com habilidades sociais e entusiasmo' :
+                           secondaryProfile === 'S' ? 'Traz estabilidade e cooperação à equipe' :
                            'Agrega precisão e pensamento analítico'}
                         </li>
                         <li>
-                          {results.secondaryProfile === 'D' ? 'Fortalece a capacidade de tomada de decisão' :
-                           results.secondaryProfile === 'I' ? 'Melhora a comunicação e engajamento' :
-                           results.secondaryProfile === 'S' ? 'Promove harmonia e trabalho em equipe' :
+                          {secondaryProfile === 'D' ? 'Fortalece a capacidade de tomada de decisão' :
+                           secondaryProfile === 'I' ? 'Melhora a comunicação e engajamento' :
+                           secondaryProfile === 'S' ? 'Promove harmonia e trabalho em equipe' :
                            'Aumenta a qualidade e atenção aos detalhes'}
                         </li>
                         <li>
-                          {results.secondaryProfile === 'D' ? 'Impulsiona iniciativas e mudanças' :
-                           results.secondaryProfile === 'I' ? 'Facilita networking e colaboração' :
-                           results.secondaryProfile === 'S' ? 'Fortalece relacionamentos duradouros' :
+                          {secondaryProfile === 'D' ? 'Impulsiona iniciativas e mudanças' :
+                           secondaryProfile === 'I' ? 'Facilita networking e colaboração' :
+                           secondaryProfile === 'S' ? 'Fortalece relacionamentos duradouros' :
                            'Aprimora processos e sistemas'}
                         </li>
                       </ul>

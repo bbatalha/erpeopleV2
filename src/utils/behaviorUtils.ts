@@ -1,8 +1,10 @@
+import { callOpenAIAssistant, callOpenAICompletion } from '../lib/openai';
+
 interface Trait {
   id: number
   value: number
-  description: string,
-  category?: string,
+  description: string
+  category?: string
   intensity?: string
 }
 
@@ -10,6 +12,30 @@ interface ProfilePattern {
   primary: string
   variations: string[]
   context?: string[]
+}
+
+// Define an interface for our OpenAI request
+interface BehaviorAnalysisRequest {
+  traits: Record<number, number>;
+  profileName?: string;
+  traitMetadata: Record<number, {
+    id: number;
+    leftTrait: string;
+    rightTrait: string;
+    category: string;
+  }>;
+  frequencyTraits?: Record<string, number>;
+  assessmentDate: string;
+}
+
+// Define an interface for OpenAI response
+interface BehaviorAnalysisResponse {
+  summary: string;
+  strengths: string[];
+  developmentAreas: string[];
+  workStyleInsights: string;
+  teamDynamicsInsights: string;
+  traitDescriptions: Record<number, string>;
 }
 
 const profilePatterns: Record<string, ProfilePattern> = {
@@ -139,7 +165,8 @@ function getTraitIntensity(value: number): string {
   return 'balanced'
 }
 
-export function getTraitsSummary(traits: Record<number, number>): string {
+// This function will be enhanced to use OpenAI when available
+export function getTraitsSummary(traits: Record<number, number>, userName?: string): string {
   const mainTraits = getMainTraits(traits)
   const dominantCategory = getDominantCategory(mainTraits)
   const pattern = profilePatterns[dominantCategory]
@@ -147,6 +174,110 @@ export function getTraitsSummary(traits: Record<number, number>): string {
   if (!pattern) return mainTraits.map(trait => getTraitTendency(trait.id, trait.value)).join(', ')
   
   return `${pattern.primary} ${pattern.variations[Math.floor(Math.random() * pattern.variations.length)]}`
+}
+
+/**
+ * Prepares data to send to OpenAI for behavior analysis
+ * This function organizes trait data with metadata for OpenAI to analyze
+ */
+export function prepareOpenAIRequest(
+  traits: Record<number, number>, 
+  frequencyTraits?: Record<string, number>,
+  userName?: string
+): BehaviorAnalysisRequest {
+  // Create trait metadata mapping for context
+  const traitMetadata: Record<number, any> = {};
+  
+  // Add metadata for each trait (what the low and high values mean)
+  Object.keys(traits).forEach(idStr => {
+    const id = Number(idStr);
+    const traitData = getTraitMetadata(id);
+    traitMetadata[id] = {
+      id,
+      leftTrait: traitData.leftTrait,
+      rightTrait: traitData.rightTrait,
+      category: getTraitCategory(id),
+      value: traits[id]
+    };
+  });
+  
+  return {
+    traits,
+    profileName: userName,
+    traitMetadata,
+    frequencyTraits,
+    assessmentDate: new Date().toISOString()
+  };
+}
+
+/**
+ * Function that calls OpenAI API for behavior analysis
+ * 
+ * This uses the OpenAI client to generate a detailed behavior analysis
+ * based on the user's trait scores
+ */
+export async function getOpenAIBehaviorAnalysis(
+  traits: Record<number, number>,
+  frequencyTraits?: Record<string, number>,
+  userName?: string
+): Promise<BehaviorAnalysisResponse | null> {
+  try {
+    // Import dynamically to avoid issues during build
+    const { generateBehaviorAnalysisPrompt, parseBehaviorAnalysisResponse, exampleAnalysisResponse } = await import('./openaiPrompt');
+    
+    // Check if there are enough traits to analyze
+    if (!traits || Object.keys(traits).length === 0) {
+      console.warn('Not enough traits to analyze');
+      return exampleAnalysisResponse;
+    }
+    
+    // Prepare the request data and generate prompt
+    const requestData = prepareOpenAIRequest(traits, frequencyTraits, userName);
+    const prompt = generateBehaviorAnalysisPrompt(
+      traits,
+      requestData.traitMetadata,
+      frequencyTraits,
+      userName
+    );
+    
+    console.log('Sending behavior traits to OpenAI for analysis');
+    
+    // Try using the assistant first, fall back to direct API if needed
+    let responseText;
+    try {
+      // Use the updated OpenAI client
+      responseText = await callOpenAIAssistant({
+        prompt: prompt
+      });
+    } catch (assistantError) {
+      console.warn('Assistant API failed, falling back to direct API:', assistantError);
+      responseText = await callOpenAICompletion({
+        prompt: prompt
+      });
+    }
+    
+    // Parse the response text into structured data
+    const parsedResponse = parseBehaviorAnalysisResponse(responseText);
+    
+    // Validate the response structure
+    if (!parsedResponse || !parsedResponse.summary) {
+      console.error('Invalid response structure from OpenAI:', parsedResponse);
+      return exampleAnalysisResponse;
+    }
+    
+    console.log('Received valid behavior analysis from OpenAI');
+    return parsedResponse;
+  } catch (error) {
+    console.error('Error calling OpenAI for behavior analysis:', error);
+    
+    // For production, use example data as fallback
+    if (import.meta.env.PROD) {
+      const { exampleAnalysisResponse } = await import('./openaiPrompt');
+      return exampleAnalysisResponse;
+    }
+    
+    return null;
+  }
 }
 
 function getDominantCategory(traits: Trait[]): string {
@@ -210,6 +341,52 @@ export function getTraitTendency(id: number, value: number): string {
                    'equilíbrio entre '
   
   return intensity + (value <= 3 ? left : right)
+}
+
+/**
+ * Get detailed metadata about a specific trait 
+ * This is used to provide context to the OpenAI model
+ */
+function getTraitMetadata(id: number): {leftTrait: string, rightTrait: string} {
+  const traitMetadata: Record<number, {leftTrait: string, rightTrait: string}> = {
+    1: {leftTrait: 'Crítico', rightTrait: 'Amigável'},
+    2: {leftTrait: 'Orientado à qualidade', rightTrait: 'Orientado à velocidade'},
+    3: {leftTrait: 'Autônomo', rightTrait: 'Trabalho em equipe'},
+    4: {leftTrait: 'Diplomático', rightTrait: 'Honesto'},
+    5: {leftTrait: 'Criativo', rightTrait: 'Consistente'},
+    6: {leftTrait: 'Leal', rightTrait: 'Pragmático'},
+    7: {leftTrait: 'Assume riscos', rightTrait: 'Cauteloso'},
+    8: {leftTrait: 'Assertivo', rightTrait: 'Modesto'},
+    9: {leftTrait: 'Rápido', rightTrait: 'Analítico'},
+    10: {leftTrait: 'Emocional', rightTrait: 'Racional'},
+    11: {leftTrait: 'Seguidor', rightTrait: 'Líder'},
+    12: {leftTrait: 'Adaptável', rightTrait: 'Estável'},
+    13: {leftTrait: 'Metódico', rightTrait: 'Espontâneo'},
+    14: {leftTrait: 'Orientado a regras', rightTrait: 'Inovador'},
+    15: {leftTrait: 'Focado no futuro', rightTrait: 'Focado no presente'},
+    16: {leftTrait: 'Focado em impacto', rightTrait: 'Focado em lucro'},
+    17: {leftTrait: 'Otimista', rightTrait: 'Realista'},
+    18: {leftTrait: 'Focado na jornada', rightTrait: 'Focado no destino'},
+    19: {leftTrait: 'Ouvinte', rightTrait: 'Comunicativo'},
+    20: {leftTrait: 'Ambicioso', rightTrait: 'Tranquilo'},
+    21: {leftTrait: 'Reservado', rightTrait: 'Transparente'},
+    22: {leftTrait: 'Tolerante', rightTrait: 'Exigente'},
+    23: {leftTrait: 'Autodidata', rightTrait: 'Adepto do aprendizado formal'},
+    24: {leftTrait: 'Focado no cliente', rightTrait: 'Focado na empresa'},
+    25: {leftTrait: 'Proativo', rightTrait: 'Reativo'},
+    26: {leftTrait: 'Orientado a resultados', rightTrait: 'Orientado a regras'},
+    27: {leftTrait: 'Extrovertido', rightTrait: 'Introvertido'},
+    28: {leftTrait: 'Casual', rightTrait: 'Atento'},
+    29: {leftTrait: 'Inovador', rightTrait: 'Tradicional'},
+    30: {leftTrait: 'Trabalhador', rightTrait: 'Relaxado'},
+    31: {leftTrait: 'Despreocupado', rightTrait: 'Preciso'},
+    32: {leftTrait: 'Caótico', rightTrait: 'Perfeccionista'},
+    33: {leftTrait: 'Organizado', rightTrait: 'Desestruturado'},
+    34: {leftTrait: 'Impulsivo', rightTrait: 'Deliberado'},
+    35: {leftTrait: 'Rigoroso', rightTrait: 'Descontraído'}
+  };
+  
+  return traitMetadata[id] || {leftTrait: 'Unknown', rightTrait: 'Unknown'};
 }
 
 export function getTraitDescription(id: number, value: number): string {

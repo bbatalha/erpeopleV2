@@ -1,24 +1,37 @@
-import React, { useState, useRef } from 'react'
-import { Download, Brain } from 'lucide-react'
+import React, { useState, useEffect, useRef } from 'react'
+import { Download, Brain, Sparkles } from 'lucide-react'
 import html2canvas from 'html2canvas'
 import { jsPDF } from 'jspdf'
 import { traitQuestions, frequencyQuestions } from '../utils/behaviorQuestions'
-import { getMainTraits, getTraitsSummary, getTraitTendency, getTraitDescription } from '../utils/behaviorUtils'
+import { getMainTraits, getTraitsSummary, getTraitTendency, getTraitDescription, getOpenAIBehaviorAnalysis } from '../utils/behaviorUtils'
+import { RatingSelector } from './RatingSelector'
+import { supabase } from '../lib/supabase'
+import { useAuth } from '../contexts/AuthContext'
 
 interface Trait {
-  name: string
+  id: number
   value: number
-  category: string
   description: string
+  category?: string
+  intensity?: string
 }
 
 interface BehaviorReportProps {
   userName?: string
+  resultId?: string // Added to support saving AI analysis
   results: {
     traits: Record<number, number>
     frequencies: Record<string, number>,
     timeStats?: {
       completedAt: string
+    }
+    aiAnalysis?: {
+      summary: string
+      strengths: string[]
+      developmentAreas: string[]
+      workStyleInsights: string
+      teamDynamicsInsights: string
+      traitDescriptions: Record<number, string>
     }
   }
   questions?: Array<{
@@ -30,21 +43,103 @@ interface BehaviorReportProps {
   }>
 }
 
-export function BehaviorReport({ results, questions, userName }: BehaviorReportProps) {
+export function BehaviorReport({ results, questions, userName, resultId }: BehaviorReportProps) {
   // Import questions from behaviorQuestions if not provided
   const allQuestions = questions || [...traitQuestions, ...frequencyQuestions]
 
   const [downloading, setDownloading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [aiAnalysis, setAiAnalysis] = useState(results.aiAnalysis)
+  const [loadingAi, setLoadingAi] = useState(false)
+  const [savingAi, setSavingAi] = useState(false)
+  const [aiSaved, setAiSaved] = useState(false)
   const reportRef = useRef<HTMLDivElement>(null)
-  const frequencyLabels = ['Nunca', 'Às vezes', 'Frequentemente', 'Sempre']
+  const frequencyLabels = ['Nunca', 'Raramente', 'Às vezes', 'Frequentemente', 'Sempre']
+  const { user } = useAuth()
+
+  // Debug logging to help identify issues
+  console.log("BehaviorReport received:", { resultId, results, questions });
+
+  // Fetch AI analysis if not already available
+  useEffect(() => {
+    const fetchAiAnalysis = async () => {
+      if (!results.traits || Object.keys(results.traits).length === 0) {
+        return;
+      }
+      
+      // Skip if we already have AI analysis
+      if (results.aiAnalysis) {
+        setAiAnalysis(results.aiAnalysis);
+        return;
+      }
+      
+      try {
+        setLoadingAi(true);
+        const analysis = await getOpenAIBehaviorAnalysis(
+          results.traits,
+          results.frequencies,
+          userName
+        );
+        
+        if (analysis) {
+          setAiAnalysis(analysis);
+          
+          // Don't automatically save here - we'll provide a button for that
+          console.log("AI analysis generated but not saved to database yet", analysis);
+        }
+      } catch (err) {
+        console.error("Error fetching AI analysis:", err);
+      } finally {
+        setLoadingAi(false);
+      }
+    };
+    
+    fetchAiAnalysis();
+  }, [results.traits, results.frequencies, results.aiAnalysis, userName]);
+
+  // Function to save AI analysis to database
+  const saveAiAnalysis = async () => {
+    if (!user || !resultId || !aiAnalysis) return;
+    
+    try {
+      setSavingAi(true);
+      
+      // Update the assessment result with AI analysis
+      const { error: updateError } = await supabase
+        .from('assessment_results')
+        .update({
+          ai_analysis: aiAnalysis,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', resultId);
+      
+      if (updateError) {
+        throw updateError;
+      }
+      
+      setAiSaved(true);
+      
+      // Auto-hide success message after a few seconds
+      setTimeout(() => {
+        setAiSaved(false);
+      }, 3000);
+      
+      console.log("AI analysis saved to database for result:", resultId);
+    } catch (err) {
+      console.error("Error saving AI analysis to database:", err);
+      setError("Failed to save AI analysis. Please try again.");
+    } finally {
+      setSavingAi(false);
+    }
+  };
 
   // Guard against undefined results
   if (!results) {
+    console.error("No behavior results data available");
     return (
       <div className="max-w-[800px] mx-auto bg-white p-8">
         <div className="bg-red-50 p-4 rounded-lg">
-          <p className="text-red-600">Error: No results data available</p>
+          <p className="text-red-600">Error: No behavior results data available</p>
         </div>
       </div>
     )
@@ -53,6 +148,10 @@ export function BehaviorReport({ results, questions, userName }: BehaviorReportP
   // Ensure we have valid traits and frequencies
   const traits = results.traits || {}
   const frequencies = results.frequencies || {}
+  
+  console.log("Behavior traits:", traits);
+  console.log("Behavior frequencies:", frequencies);
+  
   const handleDownload = async () => {
     if (!reportRef.current) return
     
@@ -144,6 +243,7 @@ export function BehaviorReport({ results, questions, userName }: BehaviorReportP
       setDownloading(false)
     }
   }
+  
   return (
     <div ref={reportRef} id="report-content" className="max-w-[800px] mx-auto bg-white p-8">
       <div className="bg-white shadow-sm rounded-lg p-8 space-y-12">
@@ -188,18 +288,148 @@ export function BehaviorReport({ results, questions, userName }: BehaviorReportP
           </p>
           <div className="max-w-2xl mx-auto bg-[#F8F9FA] p-8 rounded-lg">
             <h2 className="text-lg font-medium text-gray-900 mb-3">Resumo da Análise</h2>
-            <p className="text-gray-700 leading-relaxed">
-              Com base na análise realizada, seus principais traços comportamentais incluem tendências para
-              {getMainTraits(results.traits).map((trait, i, arr) => (
-                <span key={trait.id}>
-                  {i === arr.length - 1 ? ' e ' : i > 0 ? ', ' : ' '}
-                  <span className="font-semibold text-indigo-900">{trait.description}</span>
-                </span>
-              ))}.
-              {' '}Estes traços indicam uma orientação natural para {getTraitsSummary(results.traits)}.
-            </p>
+            
+            {loadingAi ? (
+              <div className="py-4 text-center">
+                <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-indigo-600 border-r-transparent"></div>
+                <p className="mt-2 text-sm text-gray-600">Analisando comportamento...</p>
+              </div>
+            ) : aiAnalysis ? (
+              <div className="space-y-4">
+                <p className="text-gray-700 leading-relaxed">
+                  {aiAnalysis.summary}
+                </p>
+                
+                {/* Show save button if this is a result with ID and not already saved */}
+                {resultId && !results.aiAnalysis && (
+                  <div className="text-center pt-2">
+                    <button
+                      onClick={saveAiAnalysis}
+                      disabled={savingAi || aiSaved}
+                      className={`inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md ${
+                        aiSaved 
+                          ? 'bg-green-100 text-green-800 border border-green-200' 
+                          : savingAi
+                            ? 'bg-indigo-100 text-indigo-800 border border-indigo-200'
+                            : 'bg-indigo-100 text-indigo-800 hover:bg-indigo-200 border border-indigo-200'
+                      }`}
+                    >
+                      {aiSaved ? (
+                        <>
+                          <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
+                          </svg>
+                          Análise salva
+                        </>
+                      ) : savingAi ? (
+                        <>
+                          <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-indigo-800" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          Salvando análise...
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="w-4 h-4 mr-1.5" />
+                          Salvar análise AI
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p className="text-gray-700 leading-relaxed">
+                {Object.keys(traits).length > 0 ? (
+                  <>
+                    Com base na análise realizada, seus principais traços comportamentais incluem tendências para
+                    {getMainTraits(traits).map((trait, i, arr) => (
+                      <span key={trait.id}>
+                        {i === arr.length - 1 ? ' e ' : i > 0 ? ', ' : ' '}
+                        <span className="font-semibold text-indigo-900">{trait.description}</span>
+                      </span>
+                    ))}.
+                    {' '}Estes traços indicam uma orientação natural para {getTraitsSummary(traits)}.
+                  </>
+                ) : (
+                  <span className="text-gray-500">Dados insuficientes para análise detalhada.</span>
+                )}
+              </p>
+            )}
           </div>
         </div>
+
+        {/* AI Analysis Section */}
+        {aiAnalysis && (
+          <div className="mb-8 bg-white rounded shadow-sm border border-gray-100 p-6">
+            <h2 className="text-2xl font-bold text-gray-900 mb-8">
+              Análise Comportamental Detalhada
+            </h2>
+            
+            {/* Strengths Section */}
+            <div className="mb-8">
+              <h3 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
+                <span className="w-2 h-6 bg-green-500 mr-3 rounded-sm"></span>
+                Pontos Fortes
+              </h3>
+              <ul className="space-y-2 ml-5">
+                {aiAnalysis.strengths.map((strength, index) => (
+                  <li key={index} className="flex items-start">
+                    <span className="inline-flex items-center justify-center rounded-full bg-green-100 text-green-800 p-1 mr-3 mt-1">
+                      <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 12 12">
+                        <path d="M3.707 5.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4a1 1 0 00-1.414-1.414L5 6.586 3.707 5.293z" />
+                      </svg>
+                    </span>
+                    <span className="text-gray-700">{strength}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            
+            {/* Development Areas Section */}
+            <div className="mb-8">
+              <h3 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
+                <span className="w-2 h-6 bg-amber-500 mr-3 rounded-sm"></span>
+                Áreas de Desenvolvimento
+              </h3>
+              <ul className="space-y-2 ml-5">
+                {aiAnalysis.developmentAreas.map((area, index) => (
+                  <li key={index} className="flex items-start">
+                    <span className="inline-flex items-center justify-center rounded-full bg-amber-100 text-amber-800 p-1 mr-3 mt-1">
+                      <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 3a1 1 0 00-1 1v5H4a1 1 0 100 2h5v5a1 1 0 102 0v-5h5a1 1 0 100-2h-5V4a1 1 0 00-1-1z" clipRule="evenodd" />
+                      </svg>
+                    </span>
+                    <span className="text-gray-700">{area}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            
+            {/* Work Style Insights */}
+            <div className="mb-8">
+              <h3 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
+                <span className="w-2 h-6 bg-indigo-500 mr-3 rounded-sm"></span>
+                Estilo de Trabalho
+              </h3>
+              <div className="bg-indigo-50 p-5 rounded-lg">
+                <p className="text-gray-700 leading-relaxed">{aiAnalysis.workStyleInsights}</p>
+              </div>
+            </div>
+            
+            {/* Team Dynamics */}
+            <div className="mb-8">
+              <h3 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
+                <span className="w-2 h-6 bg-purple-500 mr-3 rounded-sm"></span>
+                Dinâmica em Equipe
+              </h3>
+              <div className="bg-purple-50 p-5 rounded-lg">
+                <p className="text-gray-700 leading-relaxed">{aiAnalysis.teamDynamicsInsights}</p>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="mb-8 keep-together">
           <h2 className="text-2xl font-bold text-gray-900 mb-6">
@@ -214,15 +444,18 @@ export function BehaviorReport({ results, questions, userName }: BehaviorReportP
 
         <div className="space-y-8">
           <div className="grid grid-cols-1 gap-8">
-              {allQuestions
+            {Object.keys(traits).length > 0 ? (
+              allQuestions
                 ?.filter(q => q.type === 'trait')
                 .slice(0, Math.ceil(allQuestions.filter(q => q.type === 'trait').length / 2))
                 .map(question => {
-                  const value = results.traits[question.id]
+                  const value = traits[question.id] || 3
                   const position = ((value - 1) / 4) * 100
 
                   const tendency = getTraitTendency(question.id, value)
-                  const description = getTraitDescription(question.id, value)
+                  // Try to get the AI description if available, otherwise use the standard one
+                  const description = aiAnalysis?.traitDescriptions?.[question.id] || 
+                                     getTraitDescription(question.id, value)
 
                   return (
                     <div key={question.id} className="relative p-2 bg-gray-50 rounded-lg keep-together mb-2">
@@ -242,17 +475,23 @@ export function BehaviorReport({ results, questions, userName }: BehaviorReportP
                       </div>
                     </div>
                   )
-                })}
+                })
+            ) : (
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <p className="text-gray-500">Não há dados de traços comportamentais disponíveis para exibição.</p>
+              </div>
+            )}
           </div>
         </div>
 
-        <div className="page-break mt-12">
+        <div className="page-break keep-together">
           <div className="grid grid-cols-1 gap-8">
-              {allQuestions
+            {Object.keys(traits).length > 0 ? (
+              allQuestions
                 ?.filter(q => q.type === 'trait')
                 .slice(Math.ceil(allQuestions.filter(q => q.type === 'trait').length / 2))
                 .map(question => {
-                  const value = results.traits[question.id]
+                  const value = traits[question.id] || 3
                   const position = ((value - 1) / 4) * 100
 
                   const tendency = getTraitTendency(question.id, value)
@@ -276,7 +515,12 @@ export function BehaviorReport({ results, questions, userName }: BehaviorReportP
                       </div>
                     </div>
                   )
-                })}
+                })
+            ) : (
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <p className="text-gray-500">Não há dados adicionais de traços comportamentais disponíveis.</p>
+              </div>
+            )}
           </div>
         </div>
 
@@ -290,34 +534,35 @@ export function BehaviorReport({ results, questions, userName }: BehaviorReportP
             que são parte constante do seu estilo de trabalho.
           </p>
           <div className="grid grid-cols-1 gap-8">
-            {allQuestions
-              ?.filter(q => q.type === 'frequency')
-              .map(question => {
-                const value = results.frequencies[question.trait!]
-                const position = ((value - 1) / 4) * 100
-                
-                const frequencyLabel = frequencyLabels[Math.min(value - 1, 3)]
-                
-                return (
-                  <div key={question.id} className="bg-gray-50 p-6 rounded-lg mb-6">
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">{question.trait}</h3>
-                    <p className="text-gray-600 mb-4">Frequência atual: {frequencyLabel}</p>
-                    
-                    <div className="relative">
-                      <div className="h-1 bg-gradient-to-r from-indigo-200 via-indigo-400 to-indigo-200 rounded-full" />
-                      <div
-                        className="absolute w-4 h-4 bg-indigo-600 rounded-full top-1/2 transform -translate-y-1/2 -translate-x-1/2"
-                        style={{ left: `${position}%` }}
+            {Object.keys(frequencies).length > 0 ? (
+              allQuestions
+                ?.filter(q => q.type === 'frequency')
+                .map(question => {
+                  const value = frequencies[question.trait!] || 3
+                  const frequencyLabel = frequencyLabels[Math.min(value - 1, 4)]
+                  
+                  return (
+                    <div key={question.id} className="flex flex-col mb-8">
+                      <h3 className="text-lg font-medium text-gray-900">{question.trait}</h3>
+                      <p className="text-base text-gray-700 mb-4">Frequência atual: {frequencyLabel}</p>
+                      
+                      <RatingSelector 
+                        value={value} 
+                        readOnly={true}
+                        labels={frequencyLabels}
                       />
+                      
+                      <div className="flex justify-between mt-2 text-sm text-gray-600">
+                        {/* Removing the 'Nunca confrontador' label as requested */}
+                      </div>
                     </div>
-                    
-                    <div className="flex justify-between mt-2 text-sm text-gray-600">
-                      <span>Nunca {question.trait.toLowerCase()}</span>
-                      <span>Sempre {question.trait.toLowerCase()}</span>
-                    </div>
-                  </div>
-                )
-              })}
+                  )
+                })
+            ) : (
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <p className="text-gray-500">Não há dados de frequência de traços comportamentais disponíveis para exibição.</p>
+              </div>
+            )}
           </div>
         </div>
       </div>

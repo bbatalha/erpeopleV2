@@ -3,7 +3,7 @@
 // This enables autocompletion, go to definition, etc.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import OpenAI from "https://esm.sh/openai@4.0.0";
+import OpenAI from "https://esm.sh/openai@4.20.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -17,8 +17,13 @@ serve(async (req) => {
   }
 
   try {
+    const apiKey = Deno.env.get("OPENAI_API_KEY");
+    if (!apiKey) {
+      throw new Error("OPENAI_API_KEY is not set");
+    }
+
     const openai = new OpenAI({
-      apiKey: Deno.env.get("OPENAI_API_KEY"),
+      apiKey: apiKey,
     });
 
     // Get the assistant ID from environment variables
@@ -28,12 +33,14 @@ serve(async (req) => {
     }
 
     // Parse the request body
-    const { action, threadId, runId, systemPrompt, userPrompt } = await req.json();
+    const requestData = await req.json();
+    const { action, threadId, runId, systemPrompt, userPrompt } = requestData;
 
     if (!action) {
       throw new Error("Missing required parameter: action");
     }
 
+    console.log(`Processing action: ${action}`);
     let result = {};
 
     switch (action) {
@@ -42,16 +49,23 @@ serve(async (req) => {
           throw new Error("Missing required parameter: userPrompt");
         }
 
-        // Create a new thread
-        const thread = await openai.beta.threads.create();
+        try {
+          // Create a new thread
+          const thread = await openai.beta.threads.create();
+          console.log("Thread created:", thread.id);
 
-        // Add a message to the thread
-        await openai.beta.threads.messages.create(thread.id, {
-          role: "user",
-          content: userPrompt,
-        });
+          // Add a message to the thread
+          await openai.beta.threads.messages.create(thread.id, {
+            role: "user",
+            content: userPrompt,
+          });
+          console.log("Message added to thread");
 
-        result = { threadId: thread.id };
+          result = { threadId: thread.id };
+        } catch (error) {
+          console.error("Error in createThread:", error);
+          throw new Error(`Failed to create thread: ${error.message}`);
+        }
         break;
       }
 
@@ -60,12 +74,19 @@ serve(async (req) => {
           throw new Error("Missing required parameter: threadId");
         }
 
-        // Run the assistant on the thread
-        const run = await openai.beta.threads.runs.create(threadId, {
-          assistant_id: ASSISTANT_ID,
-        });
+        try {
+          // Run the assistant on the thread
+          console.log(`Running assistant ${ASSISTANT_ID} on thread ${threadId}`);
+          const run = await openai.beta.threads.runs.create(threadId, {
+            assistant_id: ASSISTANT_ID,
+          });
+          console.log("Run created:", run.id);
 
-        result = { runId: run.id, status: run.status };
+          result = { runId: run.id, status: run.status };
+        } catch (error) {
+          console.error("Error in runAssistant:", error);
+          throw new Error(`Failed to run assistant: ${error.message}`);
+        }
         break;
       }
 
@@ -74,10 +95,17 @@ serve(async (req) => {
           throw new Error("Missing required parameters: threadId and/or runId");
         }
 
-        // Get the run status
-        const run = await openai.beta.threads.runs.retrieve(threadId, runId);
+        try {
+          // Get the run status
+          console.log(`Checking run status for ${runId} on thread ${threadId}`);
+          const run = await openai.beta.threads.runs.retrieve(threadId, runId);
+          console.log("Run status:", run.status);
 
-        result = { status: run.status };
+          result = { status: run.status };
+        } catch (error) {
+          console.error("Error in checkRunStatus:", error);
+          throw new Error(`Failed to check run status: ${error.message}`);
+        }
         break;
       }
 
@@ -86,10 +114,17 @@ serve(async (req) => {
           throw new Error("Missing required parameter: threadId");
         }
 
-        // Get the messages from the thread
-        const messages = await openai.beta.threads.messages.list(threadId);
+        try {
+          // Get the messages from the thread
+          console.log(`Getting messages from thread ${threadId}`);
+          const messages = await openai.beta.threads.messages.list(threadId);
+          console.log(`Retrieved ${messages.data.length} messages`);
 
-        result = { messages: messages.data };
+          result = { messages: messages.data };
+        } catch (error) {
+          console.error("Error in getMessages:", error);
+          throw new Error(`Failed to get messages: ${error.message}`);
+        }
         break;
       }
 

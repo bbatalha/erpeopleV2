@@ -21,7 +21,7 @@ interface ChatCompletionRequest {
 
 interface AssistantRequest {
   threadId?: string;
-  prompt: string;
+  prompt: { prompt: string };
   systemMessage?: string;
 }
 
@@ -68,33 +68,35 @@ export async function callOpenAICompletion({
  * This provides more contextual and potentially more accurate responses
  */
 export async function callOpenAIAssistant({
-  threadId,
   prompt,
   systemMessage = DEFAULT_SYSTEM_MESSAGE
 }: AssistantRequest): Promise<string> {
   try {
     console.log('Calling OpenAI Assistant via Supabase Edge Function');
     
-    // Step 1: Create thread if not provided
-    let currentThreadId = threadId;
-    if (!currentThreadId) {
-      const { data: threadData, error: threadError } = await supabase.functions.invoke(
-        "openai-assistant", 
-        {
-          body: {
-            action: "createThread",
-            systemPrompt: systemMessage,
-            userPrompt: prompt
-          }
+    // Step 1: Create thread with the user prompt
+    const { data: threadData, error: threadError } = await supabase.functions.invoke(
+      "openai-assistant", 
+      {
+        body: {
+          action: "createThread",
+          systemPrompt: systemMessage,
+          userPrompt: prompt.prompt
         }
-      );
-      
-      if (threadError) {
-        throw new Error(`Error creating thread: ${threadError.message}`);
       }
-      
-      currentThreadId = threadData.threadId;
+    );
+    
+    if (threadError) {
+      console.error("Error creating thread:", threadError);
+      throw new Error(`Error creating thread: ${threadError.message}`);
     }
+    
+    if (!threadData || !threadData.threadId) {
+      throw new Error("No threadId returned from createThread");
+    }
+    
+    const threadId = threadData.threadId;
+    console.log("Thread created:", threadId);
     
     // Step 2: Run the assistant on the thread
     const { data: runData, error: runError } = await supabase.functions.invoke(
@@ -102,14 +104,21 @@ export async function callOpenAIAssistant({
       {
         body: {
           action: "runAssistant",
-          threadId: currentThreadId
+          threadId: threadId
         }
       }
     );
     
     if (runError) {
+      console.error("Error running assistant:", runError);
       throw new Error(`Error running assistant: ${runError.message}`);
     }
+    
+    if (!runData || !runData.runId) {
+      throw new Error("No runId returned from runAssistant");
+    }
+    
+    console.log("Run created:", runData.runId);
     
     // Step 3: Poll for completion
     let status = runData.status;
@@ -124,17 +133,23 @@ export async function callOpenAIAssistant({
         {
           body: {
             action: "checkRunStatus",
-            threadId: currentThreadId,
+            threadId: threadId,
             runId: runData.runId
           }
         }
       );
       
       if (checkError) {
+        console.error("Error checking run status:", checkError);
         throw new Error(`Error checking run status: ${checkError.message}`);
       }
       
+      if (!checkData) {
+        throw new Error("No data returned from checkRunStatus");
+      }
+      
       status = checkData.status;
+      console.log("Run status:", status);
       attempts++;
       
       if (status === "failed" || status === "expired" || status === "cancelled") {
@@ -152,26 +167,30 @@ export async function callOpenAIAssistant({
       {
         body: {
           action: "getMessages",
-          threadId: currentThreadId
+          threadId: threadId
         }
       }
     );
     
     if (messagesError) {
+      console.error("Error getting messages:", messagesError);
       throw new Error(`Error getting messages: ${messagesError.message}`);
     }
     
+    if (!messagesData || !messagesData.messages || messagesData.messages.length === 0) {
+      throw new Error("No messages returned from getMessages");
+    }
+    
     // Return the assistant's response (should be the last message in the thread)
-    if (messagesData.messages && messagesData.messages.length > 0 && 
-        messagesData.messages[0].content && messagesData.messages[0].content.length > 0) {
+    if (messagesData.messages[0].content && messagesData.messages[0].content.length > 0) {
       return messagesData.messages[0].content[0].text.value;
     } else {
-      throw new Error("No response from assistant");
+      throw new Error("No content in assistant's message");
     }
     
   } catch (error) {
     console.error("Error in callOpenAIAssistant:", error);
-    throw new Error(`Failed to get response from assistant: ${error instanceof Error ? error.message : String(error)}`);
+    throw error;
   }
 }
 

@@ -140,31 +140,6 @@ export function getMainTraits(traits: Record<number, number>): Trait[] {
     .slice(0, 3)
 }
 
-function getTraitCategory(id: number): string {
-  const categories: Record<number, string> = {
-    1: 'analytical',
-    2: 'strategic',
-    3: 'collaboration',
-    4: 'communication',
-    5: 'innovation',
-    29: 'adaptability',
-    6: 'execution',
-    7: 'risk',
-    8: 'leadership',
-    9: 'decision',
-    10: 'emotional'
-  }
-  return categories[id] || 'general'
-}
-
-function getTraitIntensity(value: number): string {
-  if (value <= 1.5) return 'very_high'
-  if (value <= 2.5) return 'high'
-  if (value >= 4.5) return 'very_high'
-  if (value >= 3.5) return 'high'
-  return 'balanced'
-}
-
 // This function will be enhanced to use OpenAI when available
 export function getTraitsSummary(traits: Record<number, number>, userName?: string): string {
   const mainTraits = getMainTraits(traits)
@@ -242,31 +217,48 @@ export async function getOpenAIBehaviorAnalysis(
     
     console.log('Sending behavior traits to OpenAI for analysis');
     
-    // Try using the assistant first, fall back to direct API if needed
-    let responseText;
+    // Try using the direct API first, as it's more reliable
     try {
-      // Use the updated OpenAI client
-      responseText = await callOpenAIAssistant({
+      const responseText = await callOpenAICompletion({
         prompt: prompt
       });
-    } catch (assistantError) {
-      console.warn('Assistant API failed, falling back to direct API:', assistantError);
-      responseText = await callOpenAICompletion({
-        prompt: prompt
-      });
+      
+      // Parse the response text into structured data
+      const parsedResponse = parseBehaviorAnalysisResponse(responseText);
+      
+      // Validate the response structure
+      if (!parsedResponse || !parsedResponse.summary) {
+        console.error('Invalid response structure from OpenAI direct API:', parsedResponse);
+        return exampleAnalysisResponse;
+      }
+      
+      console.log('Received valid behavior analysis from OpenAI direct API');
+      return parsedResponse;
+    } catch (directApiError) {
+      console.warn('Direct API failed, falling back to assistant API:', directApiError);
+      
+      // Fall back to assistant API
+      try {
+        const responseText = await callOpenAIAssistant({
+          prompt: { prompt }
+        });
+        
+        // Parse the response text into structured data
+        const parsedResponse = parseBehaviorAnalysisResponse(responseText);
+        
+        // Validate the response structure
+        if (!parsedResponse || !parsedResponse.summary) {
+          console.error('Invalid response structure from OpenAI Assistant:', parsedResponse);
+          return exampleAnalysisResponse;
+        }
+        
+        console.log('Received valid behavior analysis from OpenAI Assistant');
+        return parsedResponse;
+      } catch (assistantError) {
+        console.error('Assistant API also failed:', assistantError);
+        return exampleAnalysisResponse;
+      }
     }
-    
-    // Parse the response text into structured data
-    const parsedResponse = parseBehaviorAnalysisResponse(responseText);
-    
-    // Validate the response structure
-    if (!parsedResponse || !parsedResponse.summary) {
-      console.error('Invalid response structure from OpenAI:', parsedResponse);
-      return exampleAnalysisResponse;
-    }
-    
-    console.log('Received valid behavior analysis from OpenAI');
-    return parsedResponse;
   } catch (error) {
     console.error('Error calling OpenAI for behavior analysis:', error);
     
@@ -291,6 +283,31 @@ function getDominantCategory(traits: Trait[]): string {
   return Object.entries(categoryCount)
     .sort(([,a], [,b]) => b - a)
     [0]?.[0] || 'general'
+}
+
+function getTraitCategory(id: number): string {
+  const categories: Record<number, string> = {
+    1: 'analytical',
+    2: 'strategic',
+    3: 'collaboration',
+    4: 'communication',
+    5: 'innovation',
+    29: 'adaptability',
+    6: 'execution',
+    7: 'risk',
+    8: 'leadership',
+    9: 'decision',
+    10: 'emotional'
+  }
+  return categories[id] || 'general'
+}
+
+function getTraitIntensity(value: number): string {
+  if (value <= 1.5) return 'very_high'
+  if (value <= 2.5) return 'high'
+  if (value >= 4.5) return 'very_high'
+  if (value >= 3.5) return 'high'
+  return 'balanced'
 }
 
 export function getTraitTendency(id: number, value: number): string {

@@ -9,19 +9,10 @@ import { config } from 'dotenv';
 import OpenAI from 'openai';
 import fs from 'fs';
 import path from 'path';
+import { createClient } from '@supabase/supabase-js';
 
 // Load environment variables
 config();
-
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-if (!OPENAI_API_KEY) {
-  console.error('Error: OPENAI_API_KEY environment variable is not set.');
-  process.exit(1);
-}
-
-const openai = new OpenAI({
-  apiKey: OPENAI_API_KEY,
-});
 
 // Instructions for the behavior analysis assistant
 const instructions = `
@@ -42,9 +33,76 @@ Guidelines:
 You specialize in analyzing behavior traits measured on 1-5 scales, where each trait represents a spectrum between opposite qualities (e.g., "autonomous" vs "team-oriented"). Your goal is to help professionals understand their natural tendencies and how to leverage them effectively.
 `;
 
-// Create the assistant
+// Try to get API key from different sources
+async function getApiKey() {
+  // First try: direct from environment variable
+  const directApiKey = process.env.OPENAI_API_KEY;
+  if (directApiKey) {
+    console.log('Using OpenAI API key from environment variable');
+    return directApiKey;
+  }
+  
+  console.log('No API key found in environment variables, checking Supabase...');
+  
+  // Second try: from Supabase
+  try {
+    // Get Supabase credentials
+    const supabaseUrl = process.env.VITE_SUPABASE_URL;
+    const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY;
+    
+    if (!supabaseUrl || !supabaseKey) {
+      console.error('Error: Supabase credentials not found in environment variables.');
+      console.error('Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY');
+      process.exit(1);
+    }
+    
+    // Initialize Supabase client
+    const supabase = createClient(supabaseUrl, supabaseKey);
+    
+    // IMPORTANT: You need to set up a table with API keys in your Supabase project
+    // Replace these values with your actual configuration:
+    const tableName = 'api_keys';  // Your table name
+    const columnName = 'key_value'; // Column containing the API key
+    const identifier = 'openai';    // Identifier for the OpenAI API key
+    
+    // Fetch the API key
+    const { data, error } = await supabase
+      .from(tableName)
+      .select(columnName)
+      .eq('name', identifier)
+      .single();
+    
+    if (error) {
+      console.error('Error fetching API key from Supabase:', error);
+      return null;
+    }
+    
+    if (!data || !data[columnName]) {
+      console.error('API key not found in Supabase');
+      return null;
+    }
+    
+    console.log('Using OpenAI API key from Supabase');
+    return data[columnName];
+  } catch (error) {
+    console.error('Error accessing Supabase:', error);
+    return null;
+  }
+}
+
 async function createAssistant() {
   try {
+    const OPENAI_API_KEY = await getApiKey();
+    if (!OPENAI_API_KEY) {
+      console.error('Failed to retrieve API key from any source');
+      console.error('Please set OPENAI_API_KEY in your environment or configure Supabase API key storage');
+      process.exit(1);
+    }
+
+    const openai = new OpenAI({
+      apiKey: OPENAI_API_KEY,
+    });
+
     console.log('Creating OpenAI Assistant for behavior analysis...');
     
     const assistant = await openai.beta.assistants.create({

@@ -155,7 +155,7 @@ export function getTraitsSummary(traits: Record<number, number>, userName?: stri
  * Prepares data to send to OpenAI for behavior analysis
  * This function organizes trait data with metadata for OpenAI to analyze
  */
-export function prepareOpenAIRequest(
+function prepareOpenAIRequest(
   traits: Record<number, number>, 
   frequencyTraits?: Record<string, number>,
   userName?: string
@@ -186,6 +186,80 @@ export function prepareOpenAIRequest(
 }
 
 /**
+ * Check if a behavior analysis result already exists in the database for a user
+ * 
+ * @param resultId - The ID of the assessment result
+ * @returns Promise resolving to the analysis data if found, or null if not found
+ */
+async function checkExistingAnalysis(resultId: string): Promise<BehaviorAnalysisResponse | null> {
+  try {
+    // Import supabase client dynamically to avoid circular dependencies
+    const { supabase } = await import('../lib/supabase');
+    
+    // Query database for existing analysis
+    const { data, error } = await supabase
+      .from('assessment_results')
+      .select('ai_analysis')
+      .eq('id', resultId)
+      .single();
+    
+    if (error) {
+      console.warn('Error checking for existing analysis:', error);
+      return null;
+    }
+    
+    // If we found valid analysis data, return it
+    if (data?.ai_analysis) {
+      console.log('Found existing behavior analysis in database');
+      return data.ai_analysis as BehaviorAnalysisResponse;
+    }
+    
+    // No existing analysis found
+    return null;
+  } catch (error) {
+    console.error('Error in checkExistingAnalysis:', error);
+    return null;
+  }
+}
+
+/**
+ * Save behavior analysis results to the database
+ * 
+ * @param resultId - The ID of the assessment result
+ * @param analysis - The analysis data to save
+ * @returns Promise resolving to boolean indicating success
+ */
+async function saveAnalysisToDatabase(
+  resultId: string, 
+  analysis: BehaviorAnalysisResponse
+): Promise<boolean> {
+  try {
+    // Import supabase client dynamically to avoid circular dependencies
+    const { supabase } = await import('../lib/supabase');
+    
+    // Update the assessment result with AI analysis
+    const { error } = await supabase
+      .from('assessment_results')
+      .update({
+        ai_analysis: analysis,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', resultId);
+    
+    if (error) {
+      console.error('Error saving analysis to database:', error);
+      return false;
+    }
+    
+    console.log('Successfully saved behavior analysis to database');
+    return true;
+  } catch (error) {
+    console.error('Error in saveAnalysisToDatabase:', error);
+    return false;
+  }
+}
+
+/**
  * Function that calls OpenAI API for behavior analysis
  * 
  * This uses the OpenAI client to generate a detailed behavior analysis
@@ -194,17 +268,31 @@ export function prepareOpenAIRequest(
 export async function getOpenAIBehaviorAnalysis(
   traits: Record<number, number>,
   frequencyTraits?: Record<string, number>,
-  userName?: string
+  userName?: string,
+  resultId?: string // Optional - if provided, will check for existing results first
 ): Promise<BehaviorAnalysisResponse | null> {
   try {
-    // Import dynamically to avoid issues during build
-    const { generateBehaviorAnalysisPrompt, parseBehaviorAnalysisResponse, exampleAnalysisResponse } = await import('./openaiPrompt');
-    
     // Check if there are enough traits to analyze
     if (!traits || Object.keys(traits).length === 0) {
       console.warn('Not enough traits to analyze');
-      return exampleAnalysisResponse;
+      return null;
     }
+    
+    // If resultId is provided, check for existing analysis in database
+    if (resultId) {
+      console.log('Checking for existing analysis for result ID:', resultId);
+      const existingAnalysis = await checkExistingAnalysis(resultId);
+      
+      if (existingAnalysis) {
+        console.log('Using existing analysis from database');
+        return existingAnalysis;
+      }
+      
+      console.log('No existing analysis found, generating new one');
+    }
+    
+    // Import dynamic modules
+    const { generateBehaviorAnalysisPrompt, parseBehaviorAnalysisResponse, exampleAnalysisResponse } = await import('./openaiPrompt');
     
     // Prepare the request data and generate prompt
     const requestData = prepareOpenAIRequest(traits, frequencyTraits, userName);
@@ -233,6 +321,12 @@ export async function getOpenAIBehaviorAnalysis(
       }
       
       console.log('Received valid behavior analysis from OpenAI direct API');
+      
+      // If resultId is provided, save the analysis to the database
+      if (resultId) {
+        await saveAnalysisToDatabase(resultId, parsedResponse);
+      }
+      
       return parsedResponse;
     } catch (directApiError) {
       console.warn('Direct API failed, falling back to assistant API:', directApiError);
@@ -253,6 +347,12 @@ export async function getOpenAIBehaviorAnalysis(
         }
         
         console.log('Received valid behavior analysis from OpenAI Assistant');
+        
+        // If resultId is provided, save the analysis to the database
+        if (resultId) {
+          await saveAnalysisToDatabase(resultId, parsedResponse);
+        }
+        
         return parsedResponse;
       } catch (assistantError) {
         console.error('Assistant API also failed:', assistantError);

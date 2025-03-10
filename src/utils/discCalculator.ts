@@ -298,7 +298,7 @@ const profileDetails: Record<string, ProfileDetails> = {
   }
 }
 
-export function getProfileDetails(profile: string): ProfileDetails | null {
+function getProfileDetails(profile: string): ProfileDetails | null {
   return profileDetails[profile] || null
 }
 
@@ -313,7 +313,7 @@ export function getProfileDescription(profile: string): string {
   return descriptions[profile as keyof typeof descriptions] || ''
 }
 
-export function getProfileRecommendations(primary: string, secondary: string): string[] {
+function getProfileRecommendations(primary: string, secondary: string): string[] {
   const recommendations: Record<string, string[]> = {
     D: [
       'Pratique escuta ativa e seja mais paciente com outros',

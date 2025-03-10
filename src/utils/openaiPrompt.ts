@@ -96,7 +96,7 @@ export function parseBehaviorAnalysisResponse(responseText: string): any {
 /**
  * Example of testing the prompt generation
  */
-export function testPromptGeneration() {
+function testPromptGeneration() {
   const sampleTraits = {
     1: 4,  // Amigável (vs Crítico)
     3: 2,  // Autônomo (vs Trabalho em equipe)

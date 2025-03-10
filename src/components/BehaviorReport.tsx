@@ -56,6 +56,7 @@ export function BehaviorReport({ results, questions, userName, resultId }: Behav
   const reportRef = useRef<HTMLDivElement>(null)
   const frequencyLabels = ['Nunca', 'Raramente', 'Às vezes', 'Frequentemente', 'Sempre']
   const { user } = useAuth()
+  const [generatingNewAnalysis, setGeneratingNewAnalysis] = useState(false)
 
   // Debug logging to help identify issues
   console.log("BehaviorReport received:", { resultId, results, questions });
@@ -69,23 +70,25 @@ export function BehaviorReport({ results, questions, userName, resultId }: Behav
       
       // Skip if we already have AI analysis
       if (results.aiAnalysis) {
+        console.log("Using existing AI analysis from results");
         setAiAnalysis(results.aiAnalysis);
         return;
       }
       
       try {
         setLoadingAi(true);
+        
+        // Use the updated function that checks for existing results first
         const analysis = await getOpenAIBehaviorAnalysis(
           results.traits,
           results.frequencies,
-          userName
+          userName,
+          resultId // Pass resultId to enable database lookup and storage
         );
         
         if (analysis) {
           setAiAnalysis(analysis);
-          
-          // Don't automatically save here - we'll provide a button for that
-          console.log("AI analysis generated but not saved to database yet", analysis);
+          console.log("AI analysis loaded");
         }
       } catch (err) {
         console.error("Error fetching AI analysis:", err);
@@ -95,11 +98,41 @@ export function BehaviorReport({ results, questions, userName, resultId }: Behav
     };
     
     fetchAiAnalysis();
-  }, [results.traits, results.frequencies, results.aiAnalysis, userName]);
+  }, [results.traits, results.frequencies, results.aiAnalysis, userName, resultId]);
+
+  // Generate new analysis function (when user explicitly requests a new analysis)
+  const generateNewAnalysis = async () => {
+    if (!user || !resultId || !results.traits) return;
+    
+    try {
+      setGeneratingNewAnalysis(true);
+      setLoadingAi(true);
+      
+      // Force a new API call by not passing the resultId
+      const analysis = await getOpenAIBehaviorAnalysis(
+        results.traits,
+        results.frequencies,
+        userName
+      );
+      
+      if (analysis) {
+        setAiAnalysis(analysis);
+        
+        // Save the new analysis to database
+        await saveAiAnalysis(analysis);
+      }
+    } catch (err) {
+      console.error("Error generating new AI analysis:", err);
+      setError("Failed to generate new analysis. Please try again.");
+    } finally {
+      setLoadingAi(false);
+      setGeneratingNewAnalysis(false);
+    }
+  };
 
   // Function to save AI analysis to database
-  const saveAiAnalysis = async () => {
-    if (!user || !resultId || !aiAnalysis) return;
+  const saveAiAnalysis = async (analysisToSave = aiAnalysis) => {
+    if (!user || !resultId || !analysisToSave) return;
     
     try {
       setSavingAi(true);
@@ -108,7 +141,7 @@ export function BehaviorReport({ results, questions, userName, resultId }: Behav
       const { error: updateError } = await supabase
         .from('assessment_results')
         .update({
-          ai_analysis: aiAnalysis,
+          ai_analysis: analysisToSave,
           updated_at: new Date().toISOString()
         })
         .eq('id', resultId);
@@ -300,39 +333,68 @@ export function BehaviorReport({ results, questions, userName, resultId }: Behav
                   {aiAnalysis.summary}
                 </p>
                 
-                {/* Show save button if this is a result with ID and not already saved */}
-                {resultId && !results.aiAnalysis && (
-                  <div className="text-center pt-2">
+                {/* Controls for regenerating and saving analysis */}
+                {resultId && (
+                  <div className="flex flex-wrap justify-center space-x-2 pt-2">
+                    {/* Only show this if needed */}
+                    {!results.aiAnalysis && !aiSaved && (
+                      <button
+                        onClick={() => saveAiAnalysis()}
+                        disabled={savingAi || aiSaved}
+                        className={`inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md ${
+                          aiSaved 
+                            ? 'bg-green-100 text-green-800 border border-green-200' 
+                            : savingAi
+                              ? 'bg-indigo-100 text-indigo-800 border border-indigo-200'
+                              : 'bg-indigo-100 text-indigo-800 hover:bg-indigo-200 border border-indigo-200'
+                        }`}
+                      >
+                        {aiSaved ? (
+                          <>
+                            <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
+                            </svg>
+                            Análise salva
+                          </>
+                        ) : savingAi ? (
+                          <>
+                            <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-indigo-800" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            Salvando análise...
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="w-4 h-4 mr-1.5" />
+                            Salvar análise AI
+                          </>
+                        )}
+                      </button>
+                    )}
+                    
+                    {/* Generate new analysis button */}
                     <button
-                      onClick={saveAiAnalysis}
-                      disabled={savingAi || aiSaved}
+                      onClick={generateNewAnalysis}
+                      disabled={generatingNewAnalysis || loadingAi}
                       className={`inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md ${
-                        aiSaved 
-                          ? 'bg-green-100 text-green-800 border border-green-200' 
-                          : savingAi
-                            ? 'bg-indigo-100 text-indigo-800 border border-indigo-200'
-                            : 'bg-indigo-100 text-indigo-800 hover:bg-indigo-200 border border-indigo-200'
+                        generatingNewAnalysis || loadingAi
+                          ? 'bg-gray-100 text-gray-500 border border-gray-200 cursor-not-allowed'
+                          : 'bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200'
                       }`}
                     >
-                      {aiSaved ? (
+                      {generatingNewAnalysis || loadingAi ? (
                         <>
-                          <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
-                          </svg>
-                          Análise salva
-                        </>
-                      ) : savingAi ? (
-                        <>
-                          <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-indigo-800" fill="none" viewBox="0 0 24 24">
+                          <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-gray-500" fill="none" viewBox="0 0 24 24">
                             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                           </svg>
-                          Salvando análise...
+                          Gerando...
                         </>
                       ) : (
                         <>
-                          <Sparkles className="w-4 h-4 mr-1.5" />
-                          Salvar análise AI
+                          <RefreshIcon className="w-4 h-4 mr-1.5" />
+                          Gerar nova análise
                         </>
                       )}
                     </button>
@@ -568,4 +630,24 @@ export function BehaviorReport({ results, questions, userName, resultId }: Behav
       </div>
     </div>
   )
+}
+
+// Simple refresh icon component for the "Generate new analysis" button
+function RefreshIcon({ className }: { className?: string }) {
+  return (
+    <svg 
+      className={className} 
+      fill="none" 
+      stroke="currentColor" 
+      viewBox="0 0 24 24" 
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path 
+        strokeLinecap="round" 
+        strokeLinejoin="round" 
+        strokeWidth={2} 
+        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" 
+      />
+    </svg>
+  );
 }

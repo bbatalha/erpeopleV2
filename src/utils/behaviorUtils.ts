@@ -1,4 +1,4 @@
-import { callOpenAIAssistant, callOpenAICompletion } from '../lib/openai';
+import { getBehaviorAnalysis } from '../services/reportService';
 
 interface Trait {
   id: number
@@ -12,30 +12,6 @@ interface ProfilePattern {
   primary: string
   variations: string[]
   context?: string[]
-}
-
-// Define an interface for our OpenAI request
-interface BehaviorAnalysisRequest {
-  traits: Record<number, number>;
-  profileName?: string;
-  traitMetadata: Record<number, {
-    id: number;
-    leftTrait: string;
-    rightTrait: string;
-    category: string;
-  }>;
-  frequencyTraits?: Record<string, number>;
-  assessmentDate: string;
-}
-
-// Define an interface for OpenAI response
-interface BehaviorAnalysisResponse {
-  summary: string;
-  strengths: string[];
-  developmentAreas: string[];
-  workStyleInsights: string;
-  teamDynamicsInsights: string;
-  traitDescriptions: Record<number, string>;
 }
 
 const profilePatterns: Record<string, ProfilePattern> = {
@@ -140,7 +116,6 @@ export function getMainTraits(traits: Record<number, number>): Trait[] {
     .slice(0, 3)
 }
 
-// This function will be enhanced to use OpenAI when available
 export function getTraitsSummary(traits: Record<number, number>, userName?: string): string {
   const mainTraits = getMainTraits(traits)
   const dominantCategory = getDominantCategory(mainTraits)
@@ -152,222 +127,33 @@ export function getTraitsSummary(traits: Record<number, number>, userName?: stri
 }
 
 /**
- * Prepares data to send to OpenAI for behavior analysis
- * This function organizes trait data with metadata for OpenAI to analyze
- */
-function prepareOpenAIRequest(
-  traits: Record<number, number>, 
-  frequencyTraits?: Record<string, number>,
-  userName?: string
-): BehaviorAnalysisRequest {
-  // Create trait metadata mapping for context
-  const traitMetadata: Record<number, any> = {};
-  
-  // Add metadata for each trait (what the low and high values mean)
-  Object.keys(traits).forEach(idStr => {
-    const id = Number(idStr);
-    const traitData = getTraitMetadata(id);
-    traitMetadata[id] = {
-      id,
-      leftTrait: traitData.leftTrait,
-      rightTrait: traitData.rightTrait,
-      category: getTraitCategory(id),
-      value: traits[id]
-    };
-  });
-  
-  return {
-    traits,
-    profileName: userName,
-    traitMetadata,
-    frequencyTraits,
-    assessmentDate: new Date().toISOString()
-  };
-}
-
-/**
- * Check if a behavior analysis result already exists in the database for a user
- * 
- * @param resultId - The ID of the assessment result
- * @returns Promise resolving to the analysis data if found, or null if not found
- */
-async function checkExistingAnalysis(resultId: string): Promise<BehaviorAnalysisResponse | null> {
-  try {
-    // Import supabase client dynamically to avoid circular dependencies
-    const { supabase } = await import('../lib/supabase');
-    
-    // Query database for existing analysis
-    const { data, error } = await supabase
-      .from('assessment_results')
-      .select('ai_analysis')
-      .eq('id', resultId)
-      .single();
-    
-    if (error) {
-      console.warn('Error checking for existing analysis:', error);
-      return null;
-    }
-    
-    // If we found valid analysis data, return it
-    if (data?.ai_analysis) {
-      console.log('Found existing behavior analysis in database');
-      return data.ai_analysis as BehaviorAnalysisResponse;
-    }
-    
-    // No existing analysis found
-    return null;
-  } catch (error) {
-    console.error('Error in checkExistingAnalysis:', error);
-    return null;
-  }
-}
-
-/**
- * Save behavior analysis results to the database
- * 
- * @param resultId - The ID of the assessment result
- * @param analysis - The analysis data to save
- * @returns Promise resolving to boolean indicating success
- */
-async function saveAnalysisToDatabase(
-  resultId: string, 
-  analysis: BehaviorAnalysisResponse
-): Promise<boolean> {
-  try {
-    // Import supabase client dynamically to avoid circular dependencies
-    const { supabase } = await import('../lib/supabase');
-    
-    // Update the assessment result with AI analysis
-    const { error } = await supabase
-      .from('assessment_results')
-      .update({
-        ai_analysis: analysis,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', resultId);
-    
-    if (error) {
-      console.error('Error saving analysis to database:', error);
-      return false;
-    }
-    
-    console.log('Successfully saved behavior analysis to database');
-    return true;
-  } catch (error) {
-    console.error('Error in saveAnalysisToDatabase:', error);
-    return false;
-  }
-}
-
-/**
- * Function that calls OpenAI API for behavior analysis
- * 
- * This uses the OpenAI client to generate a detailed behavior analysis
- * based on the user's trait scores
+ * Optimized function to get OpenAI behavior analysis
+ * Now delegates to the reportService for proper caching and error handling
  */
 export async function getOpenAIBehaviorAnalysis(
   traits: Record<number, number>,
   frequencyTraits?: Record<string, number>,
   userName?: string,
-  resultId?: string // Optional - if provided, will check for existing results first
-): Promise<BehaviorAnalysisResponse | null> {
+  resultId?: string,
+  forceRefresh: boolean = false
+): Promise<any> {
+  // If no resultId provided, can't do caching
+  if (!resultId) {
+    console.log('No resultId provided to getOpenAIBehaviorAnalysis - caching disabled');
+    return null;
+  }
+  
   try {
-    // Check if there are enough traits to analyze
-    if (!traits || Object.keys(traits).length === 0) {
-      console.warn('Not enough traits to analyze');
-      return null;
-    }
-    
-    // If resultId is provided, check for existing analysis in database
-    if (resultId) {
-      console.log('Checking for existing analysis for result ID:', resultId);
-      const existingAnalysis = await checkExistingAnalysis(resultId);
-      
-      if (existingAnalysis) {
-        console.log('Using existing analysis from database');
-        return existingAnalysis;
-      }
-      
-      console.log('No existing analysis found, generating new one');
-    }
-    
-    // Import dynamic modules
-    const { generateBehaviorAnalysisPrompt, parseBehaviorAnalysisResponse, exampleAnalysisResponse } = await import('./openaiPrompt');
-    
-    // Prepare the request data and generate prompt
-    const requestData = prepareOpenAIRequest(traits, frequencyTraits, userName);
-    const prompt = generateBehaviorAnalysisPrompt(
+    // Call the service function with proper caching
+    return await getBehaviorAnalysis(
+      resultId,
       traits,
-      requestData.traitMetadata,
       frequencyTraits,
-      userName
+      userName,
+      forceRefresh
     );
-    
-    console.log('Sending behavior traits to OpenAI for analysis');
-    
-    // Try using the direct API first, as it's more reliable
-    try {
-      const responseText = await callOpenAICompletion({
-        prompt: prompt
-      });
-      
-      // Parse the response text into structured data
-      const parsedResponse = parseBehaviorAnalysisResponse(responseText);
-      
-      // Validate the response structure
-      if (!parsedResponse || !parsedResponse.summary) {
-        console.error('Invalid response structure from OpenAI direct API:', parsedResponse);
-        return exampleAnalysisResponse;
-      }
-      
-      console.log('Received valid behavior analysis from OpenAI direct API');
-      
-      // If resultId is provided, save the analysis to the database
-      if (resultId) {
-        await saveAnalysisToDatabase(resultId, parsedResponse);
-      }
-      
-      return parsedResponse;
-    } catch (directApiError) {
-      console.warn('Direct API failed, falling back to assistant API:', directApiError);
-      
-      // Fall back to assistant API
-      try {
-        const responseText = await callOpenAIAssistant({
-          prompt: { prompt }
-        });
-        
-        // Parse the response text into structured data
-        const parsedResponse = parseBehaviorAnalysisResponse(responseText);
-        
-        // Validate the response structure
-        if (!parsedResponse || !parsedResponse.summary) {
-          console.error('Invalid response structure from OpenAI Assistant:', parsedResponse);
-          return exampleAnalysisResponse;
-        }
-        
-        console.log('Received valid behavior analysis from OpenAI Assistant');
-        
-        // If resultId is provided, save the analysis to the database
-        if (resultId) {
-          await saveAnalysisToDatabase(resultId, parsedResponse);
-        }
-        
-        return parsedResponse;
-      } catch (assistantError) {
-        console.error('Assistant API also failed:', assistantError);
-        return exampleAnalysisResponse;
-      }
-    }
   } catch (error) {
-    console.error('Error calling OpenAI for behavior analysis:', error);
-    
-    // For production, use example data as fallback
-    if (import.meta.env.PROD) {
-      const { exampleAnalysisResponse } = await import('./openaiPrompt');
-      return exampleAnalysisResponse;
-    }
-    
+    console.error('Error in getOpenAIBehaviorAnalysis:', error);
     return null;
   }
 }
@@ -458,52 +244,6 @@ export function getTraitTendency(id: number, value: number): string {
                    'equilíbrio entre '
   
   return intensity + (value <= 3 ? left : right)
-}
-
-/**
- * Get detailed metadata about a specific trait 
- * This is used to provide context to the OpenAI model
- */
-function getTraitMetadata(id: number): {leftTrait: string, rightTrait: string} {
-  const traitMetadata: Record<number, {leftTrait: string, rightTrait: string}> = {
-    1: {leftTrait: 'Crítico', rightTrait: 'Amigável'},
-    2: {leftTrait: 'Orientado à qualidade', rightTrait: 'Orientado à velocidade'},
-    3: {leftTrait: 'Autônomo', rightTrait: 'Trabalho em equipe'},
-    4: {leftTrait: 'Diplomático', rightTrait: 'Honesto'},
-    5: {leftTrait: 'Criativo', rightTrait: 'Consistente'},
-    6: {leftTrait: 'Leal', rightTrait: 'Pragmático'},
-    7: {leftTrait: 'Assume riscos', rightTrait: 'Cauteloso'},
-    8: {leftTrait: 'Assertivo', rightTrait: 'Modesto'},
-    9: {leftTrait: 'Rápido', rightTrait: 'Analítico'},
-    10: {leftTrait: 'Emocional', rightTrait: 'Racional'},
-    11: {leftTrait: 'Seguidor', rightTrait: 'Líder'},
-    12: {leftTrait: 'Adaptável', rightTrait: 'Estável'},
-    13: {leftTrait: 'Metódico', rightTrait: 'Espontâneo'},
-    14: {leftTrait: 'Orientado a regras', rightTrait: 'Inovador'},
-    15: {leftTrait: 'Focado no futuro', rightTrait: 'Focado no presente'},
-    16: {leftTrait: 'Focado em impacto', rightTrait: 'Focado em lucro'},
-    17: {leftTrait: 'Otimista', rightTrait: 'Realista'},
-    18: {leftTrait: 'Focado na jornada', rightTrait: 'Focado no destino'},
-    19: {leftTrait: 'Ouvinte', rightTrait: 'Comunicativo'},
-    20: {leftTrait: 'Ambicioso', rightTrait: 'Tranquilo'},
-    21: {leftTrait: 'Reservado', rightTrait: 'Transparente'},
-    22: {leftTrait: 'Tolerante', rightTrait: 'Exigente'},
-    23: {leftTrait: 'Autodidata', rightTrait: 'Adepto do aprendizado formal'},
-    24: {leftTrait: 'Focado no cliente', rightTrait: 'Focado na empresa'},
-    25: {leftTrait: 'Proativo', rightTrait: 'Reativo'},
-    26: {leftTrait: 'Orientado a resultados', rightTrait: 'Orientado a regras'},
-    27: {leftTrait: 'Extrovertido', rightTrait: 'Introvertido'},
-    28: {leftTrait: 'Casual', rightTrait: 'Atento'},
-    29: {leftTrait: 'Inovador', rightTrait: 'Tradicional'},
-    30: {leftTrait: 'Trabalhador', rightTrait: 'Relaxado'},
-    31: {leftTrait: 'Despreocupado', rightTrait: 'Preciso'},
-    32: {leftTrait: 'Caótico', rightTrait: 'Perfeccionista'},
-    33: {leftTrait: 'Organizado', rightTrait: 'Desestruturado'},
-    34: {leftTrait: 'Impulsivo', rightTrait: 'Deliberado'},
-    35: {leftTrait: 'Rigoroso', rightTrait: 'Descontraído'}
-  };
-  
-  return traitMetadata[id] || {leftTrait: 'Unknown', rightTrait: 'Unknown'};
 }
 
 export function getTraitDescription(id: number, value: number): string {

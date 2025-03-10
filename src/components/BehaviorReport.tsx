@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { Download, Brain, Sparkles } from 'lucide-react'
+import { Download, Brain, Sparkles, RefreshCw, AlertTriangle } from 'lucide-react'
 import html2canvas from 'html2canvas'
 import { jsPDF } from 'jspdf'
 import { traitQuestions, frequencyQuestions } from '../utils/behaviorQuestions'
@@ -7,6 +7,7 @@ import { getMainTraits, getTraitsSummary, getTraitTendency, getTraitDescription,
 import { RatingSelector } from './RatingSelector'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
+import { toast } from 'react-hot-toast'
 
 interface Trait {
   id: number
@@ -57,6 +58,7 @@ export function BehaviorReport({ results, questions, userName, resultId }: Behav
   const frequencyLabels = ['Nunca', 'Raramente', 'Às vezes', 'Frequentemente', 'Sempre']
   const { user } = useAuth()
   const [generatingNewAnalysis, setGeneratingNewAnalysis] = useState(false)
+  const [loadingAttempts, setLoadingAttempts] = useState(0)
 
   // Debug logging to help identify issues
   console.log("BehaviorReport received:", { resultId, results, questions });
@@ -75,10 +77,17 @@ export function BehaviorReport({ results, questions, userName, resultId }: Behav
         return;
       }
       
+      // Skip API call if we don't have resultId (can't cache)
+      if (!resultId) {
+        console.log("No resultId provided, skipping AI analysis");
+        return;
+      }
+      
       try {
         setLoadingAi(true);
+        setLoadingAttempts(prev => prev + 1);
         
-        // Use the updated function that checks for existing results first
+        // Use the optimized function that checks database first
         const analysis = await getOpenAIBehaviorAnalysis(
           results.traits,
           results.frequencies,
@@ -88,10 +97,21 @@ export function BehaviorReport({ results, questions, userName, resultId }: Behav
         
         if (analysis) {
           setAiAnalysis(analysis);
-          console.log("AI analysis loaded");
+          setAiSaved(true); // Since it's either from cache or was cached during fetch
+          toast.success("Análise comportamental carregada com sucesso!");
+          console.log("AI analysis loaded successfully");
         }
       } catch (err) {
         console.error("Error fetching AI analysis:", err);
+        setError("Falha ao carregar análise comportamental. " + 
+                 (loadingAttempts < 2 ? "Tentando novamente..." : "Por favor, tente mais tarde."));
+                 
+        // Retry once after 2 seconds if first attempt failed
+        if (loadingAttempts < 2) {
+          setTimeout(() => {
+            fetchAiAnalysis();
+          }, 2000);
+        }
       } finally {
         setLoadingAi(false);
       }
@@ -107,62 +127,31 @@ export function BehaviorReport({ results, questions, userName, resultId }: Behav
     try {
       setGeneratingNewAnalysis(true);
       setLoadingAi(true);
+      setError(null);
       
-      // Force a new API call by not passing the resultId
+      // Force a new API call by passing forceRefresh=true
       const analysis = await getOpenAIBehaviorAnalysis(
         results.traits,
         results.frequencies,
-        userName
+        userName,
+        resultId,
+        true // Force refresh
       );
       
       if (analysis) {
         setAiAnalysis(analysis);
-        
-        // Save the new analysis to database
-        await saveAiAnalysis(analysis);
+        setAiSaved(true); // New analysis is automatically saved in the service
+        toast.success("Nova análise comportamental gerada com sucesso!");
+      } else {
+        throw new Error("Falha ao gerar nova análise");
       }
     } catch (err) {
       console.error("Error generating new AI analysis:", err);
-      setError("Failed to generate new analysis. Please try again.");
+      setError("Falha ao gerar nova análise. Por favor, tente novamente.");
+      toast.error("Erro ao gerar nova análise comportamental");
     } finally {
       setLoadingAi(false);
       setGeneratingNewAnalysis(false);
-    }
-  };
-
-  // Function to save AI analysis to database
-  const saveAiAnalysis = async (analysisToSave = aiAnalysis) => {
-    if (!user || !resultId || !analysisToSave) return;
-    
-    try {
-      setSavingAi(true);
-      
-      // Update the assessment result with AI analysis
-      const { error: updateError } = await supabase
-        .from('assessment_results')
-        .update({
-          ai_analysis: analysisToSave,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', resultId);
-      
-      if (updateError) {
-        throw updateError;
-      }
-      
-      setAiSaved(true);
-      
-      // Auto-hide success message after a few seconds
-      setTimeout(() => {
-        setAiSaved(false);
-      }, 3000);
-      
-      console.log("AI analysis saved to database for result:", resultId);
-    } catch (err) {
-      console.error("Error saving AI analysis to database:", err);
-      setError("Failed to save AI analysis. Please try again.");
-    } finally {
-      setSavingAi(false);
     }
   };
 
@@ -269,9 +258,11 @@ export function BehaviorReport({ results, questions, userName, resultId }: Behav
 
       // Download PDF
       pdf.save(filename)
+      toast.success("Relatório PDF baixado com sucesso!");
     } catch (err) {
       console.error('Error generating PDF:', err)
       setError('Erro ao gerar PDF. Por favor, tente novamente.')
+      toast.error("Erro ao gerar PDF do relatório");
     } finally {
       setDownloading(false)
     }
@@ -282,7 +273,8 @@ export function BehaviorReport({ results, questions, userName, resultId }: Behav
       <div className="bg-white shadow-sm rounded-lg p-8 space-y-12">
         <div className="flex justify-between items-center mb-6">
           {error && (
-            <div className="flex items-center text-red-600 text-sm">
+            <div className="flex items-center text-red-600 text-sm bg-red-50 p-3 rounded-lg">
+              <AlertTriangle className="w-4 h-4 mr-2 flex-shrink-0" />
               <span>{error}</span>
               <button
                 onClick={() => setError(null)}
@@ -333,46 +325,9 @@ export function BehaviorReport({ results, questions, userName, resultId }: Behav
                   {aiAnalysis.summary}
                 </p>
                 
-                {/* Controls for regenerating and saving analysis */}
+                {/* Controls for regenerating analysis */}
                 {resultId && (
                   <div className="flex flex-wrap justify-center space-x-2 pt-2">
-                    {/* Only show this if needed */}
-                    {!results.aiAnalysis && !aiSaved && (
-                      <button
-                        onClick={() => saveAiAnalysis()}
-                        disabled={savingAi || aiSaved}
-                        className={`inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md ${
-                          aiSaved 
-                            ? 'bg-green-100 text-green-800 border border-green-200' 
-                            : savingAi
-                              ? 'bg-indigo-100 text-indigo-800 border border-indigo-200'
-                              : 'bg-indigo-100 text-indigo-800 hover:bg-indigo-200 border border-indigo-200'
-                        }`}
-                      >
-                        {aiSaved ? (
-                          <>
-                            <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
-                            </svg>
-                            Análise salva
-                          </>
-                        ) : savingAi ? (
-                          <>
-                            <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-indigo-800" fill="none" viewBox="0 0 24 24">
-                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                            </svg>
-                            Salvando análise...
-                          </>
-                        ) : (
-                          <>
-                            <Sparkles className="w-4 h-4 mr-1.5" />
-                            Salvar análise AI
-                          </>
-                        )}
-                      </button>
-                    )}
-                    
                     {/* Generate new analysis button */}
                     <button
                       onClick={generateNewAnalysis}

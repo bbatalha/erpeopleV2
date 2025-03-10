@@ -9,9 +9,9 @@ export default defineConfig({
       output: {
         manualChunks: {
           vendor: ['react', 'react-dom', 'react-router-dom'],
-          ui: ['@mui/material', '@mui/x-data-grid', '@mui/x-date-pickers'],
+          ui: ['@mui/material', '@mui/x-data-grid'],
           charts: ['recharts'],
-          utils: ['date-fns', 'html2canvas', 'jspdf']
+          utils: ['html2canvas', 'jspdf']
         }
       }
     }

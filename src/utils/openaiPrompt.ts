@@ -77,7 +77,7 @@ Observe que o campo 'traitDescriptions' deve conter apenas os 5-7 traços mais s
 }
 
 /**
- * Sample function to parse OpenAI response
+ * Function to parse OpenAI response
  */
 export function parseBehaviorAnalysisResponse(responseText: string): any {
   try {
@@ -94,75 +94,39 @@ export function parseBehaviorAnalysisResponse(responseText: string): any {
 }
 
 /**
- * Example of testing the prompt generation
- */
-function testPromptGeneration() {
-  const sampleTraits = {
-    1: 4,  // Amigável (vs Crítico)
-    3: 2,  // Autônomo (vs Trabalho em equipe)
-    5: 5,  // Consistente (vs Criativo)
-    7: 3,  // Equilíbrio entre assumir riscos e ser cauteloso
-    9: 1   // Rápido (vs Analítico)
-  };
-  
-  const sampleMetadata: Record<number, any> = {
-    1: { leftTrait: 'Crítico', rightTrait: 'Amigável', category: 'Communication' },
-    3: { leftTrait: 'Autônomo', rightTrait: 'Trabalho em equipe', category: 'Collaboration' },
-    5: { leftTrait: 'Criativo', rightTrait: 'Consistente', category: 'Adaptability' },
-    7: { leftTrait: 'Assume riscos', rightTrait: 'Cauteloso', category: 'Risk-taking' },
-    9: { leftTrait: 'Rápido', rightTrait: 'Analítico', category: 'Decision-making' }
-  };
-  
-  const sampleFrequencyTraits = {
-    'Confrontador': 2,
-    'Competitivo': 4
-  };
-  
-  const prompt = generateBehaviorAnalysisPrompt(
-    sampleTraits,
-    sampleMetadata,
-    sampleFrequencyTraits,
-    'João Silva'
-  );
-  
-  console.log(prompt);
-  return prompt;
-}
-
-/**
- * Comprehensive example of a complete behavior analysis response
+ * Comprehensive example of a complete behavior analysis response for fallback
  */
 export const exampleAnalysisResponse = {
-  "summary": "O perfil comportamental de João revela uma pessoa naturalmente colaborativa e orientada às pessoas, com tendência a ser metódica e analítica. Sua abordagem equilibrada entre assumir riscos e cautela demonstra maturidade em processos decisórios, enquanto sua forte inclinação para execução rápida sugere dinamismo e eficiência. Nota-se também sua predileção por consistência e previsibilidade em vez de experimentação constante, o que o torna particularmente valioso em ambientes que requerem confiabilidade e processos bem estabelecidos. Esse conjunto de características forma um profissional que provavelmente se destaca na implementação cuidadosa de projetos, mantendo bons relacionamentos interpessoais enquanto garante qualidade e eficiência.",
+  "summary": "O perfil comportamental analisado revela uma pessoa naturalmente colaborativa e orientada às pessoas, com tendência a ser metódica e analítica. Sua abordagem equilibrada entre assumir riscos e cautela demonstra maturidade em processos decisórios, enquanto sua forte inclinação para consistência sugere valorização de estabilidade e previsibilidade. Nota-se também sua predileção por harmonia e construção de relacionamentos, o que o torna particularmente valioso em ambientes que requerem trabalho em equipe e processos bem estabelecidos. Esse conjunto de características forma um profissional que provavelmente se destaca na implementação cuidadosa de projetos, mantendo bons relacionamentos interpessoais enquanto garante qualidade e eficiência.",
   
   "strengths": [
     "Capacidade excepcional de construir e manter relacionamentos profissionais positivos",
-    "Habilidade para execução rápida e eficiente de tarefas sem comprometer a precisão",
-    "Abordagem equilibrada e madura em relação à tomada de riscos",
     "Confiabilidade e consistência na entrega de resultados",
-    "Capacidade de trabalhar independentemente com autonomia significativa"
+    "Abordagem equilibrada e madura em relação à tomada de riscos",
+    "Habilidade para trabalho metódico com alto padrão de qualidade",
+    "Forte orientação para colaboração e trabalho em equipe"
   ],
   
   "developmentAreas": [
     "Encontrar oportunidades para aplicar pensamento criativo e inovador quando apropriado",
     "Desenvolver maior flexibilidade para se adaptar a ambientes de trabalho em constante mudança",
-    "Cultivar habilidades de delegação para complementar sua tendência à independência",
-    "Balancear a velocidade de execução com análise mais profunda em situações complexas"
+    "Cultivar assertividade em momentos que exigem posicionamento mais firme",
+    "Balancear a orientação aos detalhes com visão mais estratégica em situações complexas"
   ],
   
-  "workStyleInsights": "João apresenta um estilo de trabalho caracterizado pela eficiência e atenção aos relacionamentos. Sua preferência por autonomia indica que provavelmente trabalha bem com supervisão mínima, enquanto sua tendência à consistência sugere que valoriza ambientes previsíveis com processos claros. Sua abordagem rápida, combinada com competitividade moderada, o posiciona como alguém que busca resultados, mas não à custa da harmonia interpessoal. Este é um perfil particularmente adequado para funções que exigem confiabilidade, qualidade e manutenção de boas relações com stakeholders, como gerenciamento de projetos, operações ou funções de suporte ao cliente de alto nível.",
+  "workStyleInsights": "O estilo de trabalho apresentado caracteriza-se pela meticulosidade e atenção aos relacionamentos. A preferência por estabilidade indica valorização de ambientes previsíveis com processos claros. Sua tendência à consistência, combinada com abordagem colaborativa, o posiciona como alguém que busca qualidade e harmonia simultaneamente. Este é um perfil particularmente adequado para funções que exigem confiabilidade, precisão e manutenção de boas relações com stakeholders, como gerenciamento de processos, operações ou funções de suporte especializado.",
   
-  "teamDynamicsInsights": "Em contextos de equipe, João provavelmente se destaca como um colaborador confiável que contribui positivamente para o clima interpessoal. Sua natureza amigável facilita a comunicação, enquanto sua autonomia permite que assuma responsabilidade por suas entregas sem necessidade de monitoramento constante. Em situações de conflito, tende a adotar uma abordagem pacificadora, embora sua competitividade moderada sugira que também pode defender suas posições quando necessário. Sua consistência o torna um elemento estabilizador em equipes, proporcionando continuidade e confiabilidade. Para maximizar seu potencial em dinâmicas de grupo, João se beneficiaria de ambientes que valorizam tanto relacionamentos positivos quanto entrega eficiente de resultados.",
+  "teamDynamicsInsights": "Em contextos de equipe, este perfil provavelmente se destaca como um colaborador confiável que contribui positivamente para o clima interpessoal e a qualidade das entregas. Sua natureza amigável facilita a comunicação, enquanto sua consistência permite que assuma responsabilidade por processos importantes. Em situações de conflito, tende a adotar uma abordagem conciliadora, buscando soluções que preservem relacionamentos. Sua estabilidade o torna um elemento importante em equipes, proporcionando continuidade e confiabilidade. Para maximizar seu potencial em dinâmicas de grupo, este perfil se beneficiaria de ambientes que valorizam tanto relacionamentos positivos quanto excelência técnica.",
   
   "traitDescriptions": {
-    "1": "A tendência de João para ser amigável em vez de crítico se manifesta em sua abordagem primariamente orientada às pessoas. Isso sugere que ele prioriza harmonia e relacionamentos positivos, possivelmente buscando consenso e mediação em situações de tensão. Este traço é particularmente valioso em funções que requerem colaboração e construção de relacionamentos, embora em algumas situações possa se beneficiar de uma abordagem mais direta e crítica quando necessário para impulsionar melhorias.",
+    "1": "A tendência para ser amigável em vez de crítico se manifesta em uma abordagem primariamente orientada às pessoas. Isso sugere priorização de harmonia e relacionamentos positivos, possivelmente buscando consenso e mediação em situações de tensão. Este traço é particularmente valioso em funções que requerem colaboração e construção de relacionamentos, embora em algumas situações possa se beneficiar de uma abordagem mais direta quando necessário para impulsionar melhorias.",
     
-    "3": "João demonstra uma preferência moderada por autonomia em vez de trabalho em equipe, indicando que se sente confortável trabalhando independentemente e tomando decisões por conta própria. Este traço sugere capacidade de iniciativa e autogestão, sendo particularmente valioso em funções que requerem responsabilidade individual e decisões independentes. No entanto, em contextos altamente colaborativos, João pode precisar fazer um esforço consciente para integrar-se mais ativamente em dinâmicas de equipe.",
+    "5": "A forte tendência para consistência em vez de criatividade revela uma preferência significativa por ambientes estáveis e processos previsíveis. Este traço o torna extremamente confiável em termos de manutenção de padrões e procedimentos estabelecidos, sendo particularmente valioso em funções que exigem precisão e conformidade. Contudo, em situações que demandam inovação ou soluções não convencionais, pode se beneficiar do desenvolvimento deliberado de abordagens mais criativas.",
     
-    "5": "A forte tendência de João para consistência em vez de criatividade revela uma preferência significativa por ambientes estáveis e processos previsíveis. Este traço o torna extremamente confiável em termos de manutenção de padrões e procedimentos estabelecidos, sendo particularmente valioso em funções que exigem precisão e conformidade. Contudo, em situações que demandam inovação ou soluções não convencionais, João pode se beneficiar do desenvolvimento deliberado de abordagens mais criativas.",
+    "7": "O equilíbrio entre assumir riscos e ser cauteloso demonstra uma abordagem ponderada frente a situações de incerteza. Esta característica sugere maturidade decisória, permitindo avaliar oportunidades com otimismo realista. Em contextos profissionais, este traço se traduz em decisões que nem são excessivamente conservadoras nem imprudentemente arriscadas, representando um valioso ponto médio entre avanço e proteção.",
     
-    "7": "O equilíbrio de João entre assumir riscos e ser cauteloso demonstra uma abordagem ponderada frente a situações de incerteza. Esta característica sugere maturidade decisória, permitindo-lhe avaliar oportunidades com otimismo realista. Em contextos profissionais, este traço se traduz em decisões que nem são excessivamente conservadoras nem imprudentemente arriscadas, representando um valioso ponto médio entre avanço e proteção.",
+    "3": "A preferência moderada por trabalho em equipe em vez de autonomia indica valorização da colaboração e esforços coletivos. Este traço sugere capacidade de integração e contribuição em dinâmicas de grupo, sendo particularmente valioso em funções que requerem cooperação e alinhamento entre diferentes stakeholders. Esta orientação colaborativa fortalece a capacidade de construir relacionamentos profissionais produtivos.",
     
-    "9": "A forte orientação de João para rapidez em vez de análise aprofundada indica uma preferência marcante por eficiência e resultados imediatos. Esta característica o torna particularmente eficaz em ambientes dinâmicos que valorizam respostas ágeis e conclusão eficiente de tarefas. No entanto, em situações de alta complexidade ou quando decisões têm implicações de longo prazo, João poderia se beneficiar de desacelerar deliberadamente para incorporar uma análise mais profunda em seu processo."
+    "9": "A tendência para análise aprofundada em vez de rapidez indica uma preferência por abordagens meticulosas e bem fundamentadas. Esta característica o torna particularmente eficaz em ambientes que valorizam precisão e qualidade acima da velocidade. Em contextos profissionais, este traço permite identificação de detalhes importantes e consideração cuidadosa de implicações antes da tomada de decisões."
   }
 };

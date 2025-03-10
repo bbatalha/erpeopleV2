@@ -6,6 +6,7 @@ import { DISCReport } from '../components/DISCReport'
 import { BehaviorReport } from '../components/BehaviorReport'
 import { fetchAssessmentResult } from '../lib/api'
 import { checkInternetConnectivity, getOfflineErrorMessage } from '../lib/api'
+import { toast } from 'react-hot-toast'
 
 export function Results() {
   const { id } = useParams()
@@ -19,12 +20,16 @@ export function Results() {
   const [assessmentData, setAssessmentData] = useState<any>(null)
   const [behaviorData, setBehaviorData] = useState<any>(null)
   const [retrying, setRetrying] = useState(false)
+  const [resultId, setResultId] = useState<string | null>(null)
 
   const fetchData = async () => {
     if (!user || !id) return
 
     setLoading(true)
     setError(null)
+    
+    // Set resultId for component use
+    setResultId(id)
 
     try {
       // Check for internet connectivity first
@@ -212,7 +217,7 @@ export function Results() {
         />
       ) : assessmentType === 'behavior' ? (
         <BehaviorReport
-          resultId={result.id} // Pass result ID to enable saving
+          resultId={resultId} // Pass result ID to enable saving
           userName={userName}
           results={behaviorData?.results || result.results}
           timeStats={result.assessment_responses?.responses?.timeStats}

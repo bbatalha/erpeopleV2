@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { User } from '@supabase/supabase-js'
 import { fetchLinkedInProfile, updateUserProfile } from '../lib/linkedinProfileFetcher'
+import { toast } from 'react-hot-toast'
 
 interface AuthError {
   message: string
@@ -13,6 +14,7 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<void>
   signUp: (email: string, password: string, fullName: string, linkedinUrl: string) => Promise<void>
   signOut: () => Promise<void>
+  isLoggingOut: boolean
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -20,6 +22,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
 
   useEffect(() => {
     // Check active sessions and sets the user
@@ -88,11 +91,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = async () => {
     try {
+      setIsLoggingOut(true)
+
+      // Clear any application-specific cache or data
+      localStorage.removeItem('lastRoute')
+      localStorage.removeItem('userPreferences')
+      sessionStorage.clear()
+      
+      // Remove any custom cookies related to auth
+      document.cookie.split(";").forEach(cookie => {
+        const [name] = cookie.trim().split("=")
+        document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`
+      })
+      
+      // Call Supabase signOut to invalidate the session on the server
       const { error } = await supabase.auth.signOut()
       if (error) throw error
+      
+      // Show success toast notification
+      toast.success('Você saiu com sucesso', { 
+        duration: 3000,
+        position: 'top-center',
+        icon: '👋'
+      })
+      
+      // Clear user state
+      setUser(null)
     } catch (err) {
       console.error('Error signing out:', err)
+      toast.error('Erro ao desconectar. Tente novamente.')
       throw err
+    } finally {
+      setIsLoggingOut(false)
     }
   }
 
@@ -100,7 +130,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     user,
     signIn,
     signUp,
-    signOut
+    signOut,
+    isLoggingOut
   }
 
   return (

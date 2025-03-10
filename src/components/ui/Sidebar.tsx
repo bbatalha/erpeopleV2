@@ -8,6 +8,8 @@ interface Links {
   label: string
   href: string
   icon: React.JSX.Element | React.ReactNode
+  onClick?: () => void
+  disabled?: boolean
 }
 
 interface SidebarContextProps {
@@ -160,6 +162,35 @@ export const SidebarLink = ({
   props?: any
 }) => {
   const { open, animate } = useSidebar()
+  
+  // Handle both regular links and action links
+  if (link.onClick) {
+    return (
+      <button
+        onClick={link.onClick}
+        disabled={link.disabled}
+        className={cn(
+          'flex items-center justify-start gap-2 group/sidebar py-2 w-full text-left',
+          link.disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer',
+          className
+        )}
+        aria-label={link.label}
+        {...props}
+      >
+        {link.icon}
+        <motion.span
+          animate={{
+            display: animate ? (open ? 'inline-block' : 'none') : 'inline-block',
+            opacity: animate ? (open ? 1 : 0) : 1,
+          }}
+          className="text-neutral-700 dark:text-neutral-200 text-sm group-hover/sidebar:translate-x-1 transition duration-150 whitespace-pre inline-block !p-0 !m-0"
+        >
+          {link.label}
+        </motion.span>
+      </button>
+    );
+  }
+
   return (
     <Link
       to={link.href}

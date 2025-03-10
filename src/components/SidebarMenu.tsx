@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { Brain, LayoutDashboard, UserCircle, History, Settings, LogOut, Shield } from 'lucide-react'
 import { Sidebar, SidebarBody, SidebarLink } from './ui/Sidebar'
 import { useAuth } from '../contexts/AuthContext'
@@ -7,7 +7,8 @@ import { supabase } from '../lib/supabase'
 
 export function SidebarMenu() {
   const navigate = useNavigate()
-  const { signOut, user } = useAuth()
+  const location = useLocation()
+  const { signOut, user, isLoggingOut } = useAuth()
   const [open, setOpen] = useState(false)
   const [isAdmin, setIsAdmin] = useState(false)
 
@@ -34,6 +35,11 @@ export function SidebarMenu() {
 
   const handleSignOut = async () => {
     try {
+      // Save last location before logout (excluding auth pages)
+      if (!['/login', '/register', '/forgot-password'].includes(location.pathname)) {
+        localStorage.setItem('lastRoute', location.pathname)
+      }
+      
       await signOut()
       navigate('/login')
     } catch (error) {
@@ -69,9 +75,9 @@ export function SidebarMenu() {
       icon: <Settings className="text-neutral-700 dark:text-neutral-200 h-5 w-5 flex-shrink-0" />
     },
     {
-      label: 'Logout',
+      label: isLoggingOut ? 'Saindo...' : 'Logout',
       href: '#',
-      icon: <LogOut className="text-neutral-700 dark:text-neutral-200 h-5 w-5 flex-shrink-0" />
+      icon: <LogOut className={`text-neutral-700 dark:text-neutral-200 h-5 w-5 flex-shrink-0 ${isLoggingOut ? 'animate-pulse' : ''}`} />
     }
   ]
 
@@ -86,7 +92,8 @@ export function SidebarMenu() {
                 key={idx}
                 link={{
                   ...link,
-                  onClick: link.label === 'Logout' ? handleSignOut : undefined
+                  onClick: link.label.includes('Logout') ? handleSignOut : undefined,
+                  disabled: isLoggingOut && link.label.includes('Logout')
                 }}
               />
             ))}

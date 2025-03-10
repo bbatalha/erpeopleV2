@@ -1,49 +1,77 @@
-// OpenAI status check function
-// This Edge Function validates that the OpenAI integration is properly configured
-
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
+import { OpenAI } from 'https://esm.sh/openai@4.24.1'
 
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
 
 serve(async (req) => {
   // Handle CORS preflight requests
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders })
   }
 
   try {
-    // Check if OPENAI_API_KEY is set
-    const apiKey = Deno.env.get("OPENAI_API_KEY");
-    const assistantId = Deno.env.get("OPENAI_ASSISTANT_ID");
-    
-    const response = {
-      available: Boolean(apiKey),
-      assistantAvailable: Boolean(assistantId),
-      message: apiKey 
-        ? "OpenAI integration is properly configured" 
-        : "OpenAI API key is not configured",
-      timestamp: new Date().toISOString()
-    };
+    // Check if OpenAI API key is available
+    const apiKey = Deno.env.get('OPENAI_API_KEY')
+    if (!apiKey) {
+      return new Response(
+        JSON.stringify({ 
+          available: false,
+          error: 'OpenAI API key not configured',
+          model: null
+        }),
+        { 
+          headers: { 
+            ...corsHeaders,
+            'Content-Type': 'application/json' 
+          } 
+        }
+      )
+    }
 
-    return new Response(JSON.stringify(response), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  } catch (error) {
-    console.error("Error checking OpenAI status:", error);
+    // Initialize OpenAI client
+    const openai = new OpenAI({
+      apiKey: apiKey
+    })
+
+    // Try a simple models list request to verify connectivity
+    const models = await openai.models.list()
+    
+    // Check if gpt-4o is available
+    const hasGpt4o = models.data.some(model => model.id === 'gpt-4o')
 
     return new Response(
       JSON.stringify({ 
-        available: false, 
-        message: `Error checking OpenAI status: ${error.message}`,
+        available: true,
+        model: 'gpt-4o',
+        hasGpt4o,
+        modelCount: models.data.length
+      }),
+      { 
+        headers: { 
+          ...corsHeaders,
+          'Content-Type': 'application/json' 
+        } 
+      }
+    )
+  } catch (error) {
+    console.error('OpenAI API status check error:', error)
+    
+    return new Response(
+      JSON.stringify({ 
+        available: false,
+        error: error.message || 'Failed to connect to OpenAI API',
         timestamp: new Date().toISOString()
       }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      { 
+        status: 500, 
+        headers: { 
+          ...corsHeaders,
+          'Content-Type': 'application/json' 
+        } 
       }
-    );
+    )
   }
-});
+})

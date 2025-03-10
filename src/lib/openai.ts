@@ -3,6 +3,7 @@
  * This file provides a configured OpenAI client and utilities for API interactions
  */
 import { supabase } from './supabase';
+import { toast } from 'react-hot-toast';
 
 // Default system message for behavior analysis
 const DEFAULT_SYSTEM_MESSAGE = `You are an expert behavioral psychologist specializing in professional development.
@@ -25,6 +26,13 @@ interface AssistantRequest {
   systemMessage?: string;
 }
 
+// Rate limiting state
+const rateLimitState = {
+  isRateLimited: false,
+  resetTime: 0,
+  retryAfter: 0
+};
+
 /**
  * Securely call OpenAI chat completions via Supabase Edge Function
  * This is the recommended approach for browser environments
@@ -36,6 +44,20 @@ export async function callOpenAICompletion({
   maxTokens = 2048
 }: ChatCompletionRequest): Promise<string> {
   try {
+    // Check if we're currently rate limited
+    if (rateLimitState.isRateLimited) {
+      const now = Date.now();
+      if (now < rateLimitState.resetTime) {
+        const waitingSeconds = Math.ceil((rateLimitState.resetTime - now) / 1000);
+        console.log(`OpenAI is currently rate limited. Retry available in ${waitingSeconds}s`);
+        
+        throw new Error(`Rate limit in effect. Please try again in ${waitingSeconds} seconds.`);
+      } else {
+        // Reset rate limit state if we've passed the reset time
+        rateLimitState.isRateLimited = false;
+      }
+    }
+    
     console.log('Calling OpenAI completion via Supabase Edge Function');
     
     // Call the Supabase Edge Function
@@ -57,9 +79,64 @@ export async function callOpenAICompletion({
     }
     
     return data.completion;
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error in callOpenAICompletion:', error);
+    
+    // Check for rate limit errors in the response
+    if (error?.message?.includes('Rate limit') || 
+        (error?.context?.body && JSON.parse(error.context.body)?.error?.includes('Rate limit'))) {
+      
+      // Set rate limit state
+      const retryAfter = extractRetryAfter(error) || 60; // Default to 60s if we can't extract
+      rateLimitState.isRateLimited = true;
+      rateLimitState.retryAfter = retryAfter;
+      rateLimitState.resetTime = Date.now() + (retryAfter * 1000);
+      
+      // Show a toast with the rate limit message
+      toast.error(`OpenAI rate limit reached. Please try again in ${Math.ceil(retryAfter)} seconds.`);
+      
+      throw new Error(`Rate limit reached. Please try again in ${Math.ceil(retryAfter)} seconds.`);
+    }
+    
     throw new Error(`Failed to get completion: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+/**
+ * Attempt to extract retry-after time from various error formats
+ */
+function extractRetryAfter(error: any): number | null {
+  try {
+    // Check direct error.retryAfter property
+    if (typeof error.retryAfter === 'number') {
+      return error.retryAfter;
+    }
+    
+    // Check for seconds in the error message
+    const secondsMatch = error.message?.match(/try again in (\d+\.?\d*)s/i);
+    if (secondsMatch && secondsMatch[1]) {
+      return parseFloat(secondsMatch[1]);
+    }
+    
+    // Try to parse the error body if it's a Supabase functions error
+    if (error.context?.body) {
+      try {
+        const bodyObj = JSON.parse(error.context.body);
+        if (bodyObj.error && bodyObj.error.includes('try again in')) {
+          const timeMatch = bodyObj.error.match(/try again in (\d+\.?\d*)s/i);
+          if (timeMatch && timeMatch[1]) {
+            return parseFloat(timeMatch[1]);
+          }
+        }
+      } catch (parseError) {
+        console.warn('Failed to parse error body:', parseError);
+      }
+    }
+    
+    return null;
+  } catch (e) {
+    console.warn('Error extracting retry time:', e);
+    return null;
   }
 }
 
@@ -72,6 +149,20 @@ export async function callOpenAIAssistant({
   systemMessage = DEFAULT_SYSTEM_MESSAGE
 }: AssistantRequest): Promise<string> {
   try {
+    // Check if we're currently rate limited (same as completion function)
+    if (rateLimitState.isRateLimited) {
+      const now = Date.now();
+      if (now < rateLimitState.resetTime) {
+        const waitingSeconds = Math.ceil((rateLimitState.resetTime - now) / 1000);
+        console.log(`OpenAI is currently rate limited. Retry available in ${waitingSeconds}s`);
+        
+        throw new Error(`Rate limit in effect. Please try again in ${waitingSeconds} seconds.`);
+      } else {
+        // Reset rate limit state if we've passed the reset time
+        rateLimitState.isRateLimited = false;
+      }
+    }
+    
     console.log('Calling OpenAI Assistant via Supabase Edge Function');
     
     // Step 1: Create thread with the user prompt
@@ -188,8 +279,25 @@ export async function callOpenAIAssistant({
       throw new Error("No content in assistant's message");
     }
     
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error in callOpenAIAssistant:", error);
+    
+    // Check for rate limit errors in the response (same as completion function)
+    if (error?.message?.includes('Rate limit') || 
+        (error?.context?.body && JSON.parse(error.context.body)?.error?.includes('Rate limit'))) {
+      
+      // Set rate limit state
+      const retryAfter = extractRetryAfter(error) || 60; // Default to 60s if we can't extract
+      rateLimitState.isRateLimited = true;
+      rateLimitState.retryAfter = retryAfter;
+      rateLimitState.resetTime = Date.now() + (retryAfter * 1000);
+      
+      // Show a toast with the rate limit message
+      toast.error(`OpenAI rate limit reached. Please try again in ${Math.ceil(retryAfter)} seconds.`);
+      
+      throw new Error(`Rate limit reached. Please try again in ${Math.ceil(retryAfter)} seconds.`);
+    }
+    
     throw error;
   }
 }
@@ -200,6 +308,17 @@ export async function callOpenAIAssistant({
  */
 export async function checkOpenAIAvailability(): Promise<boolean> {
   try {
+    // First check if we're rate limited
+    if (rateLimitState.isRateLimited) {
+      const now = Date.now();
+      if (now < rateLimitState.resetTime) {
+        // Still rate limited
+        return false;
+      }
+      // Reset rate limit if time has passed
+      rateLimitState.isRateLimited = false;
+    }
+    
     // Try to ping the edge function to see if it's deployed
     const { data, error } = await supabase.functions.invoke(
       "openai-status", 

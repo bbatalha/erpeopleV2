@@ -85,12 +85,26 @@ node scripts/update-existing-results.js
 2. Click the "Test Connection" button under the OpenAI integration section
 3. If connected successfully, you'll see a "Connected" indicator
 
+## Model Configuration
+
+This application uses `gpt-4o` as the OpenAI model for behavior analysis. This is the latest model from OpenAI that offers:
+
+- Better context understanding
+- Improved behavior analysis capabilities
+- More consistent responses
+- Comparable pricing to previous models
+
+If you need to change the model, modify the model parameter in the following files:
+- `supabase/functions/openai-analysis/index.ts`
+- `supabase/functions/openai-assistant/index.ts`
+
 ## Troubleshooting
 
 - **Edge Function Deployment Failures**: Ensure your Supabase CLI is updated and you have the correct permissions
 - **API Key Issues**: Verify the API key is correctly set as a secret
 - **Connection Test Failures**: Check the browser console for detailed error messages
 - **Missing AI Analysis**: Ensure your OpenAI account has sufficient credits
+- **Rate Limiting**: If you're experiencing rate limits, consider reducing the number of concurrent requests or using a model with higher rate limits
 
 ## Usage Notes
 

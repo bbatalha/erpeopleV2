@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabase';
 import { callOpenAICompletion } from '../lib/openai';
 import { generateBehaviorAnalysisPrompt, parseBehaviorAnalysisResponse, exampleAnalysisResponse } from '../utils/openaiPrompt';
+import { toast } from 'react-hot-toast';
 
 interface BehaviorAnalysisResponse {
   summary: string;
@@ -11,13 +12,22 @@ interface BehaviorAnalysisResponse {
   traitDescriptions: Record<number, string>;
 }
 
+// Local in-memory cache to prevent duplicate API calls in same session
+const analysisCache = new Map<string, BehaviorAnalysisResponse>();
+
 /**
  * Retrieves behavior analysis from the database if it exists
  * @param resultId The assessment result ID
  */
 export async function getCachedAnalysis(resultId: string): Promise<BehaviorAnalysisResponse | null> {
   try {
-    // Query database for existing analysis
+    // First check in-memory cache for faster retrieval
+    if (analysisCache.has(resultId)) {
+      console.log('Retrieved analysis from in-memory cache');
+      return analysisCache.get(resultId) as BehaviorAnalysisResponse;
+    }
+    
+    // Then check database
     const { data, error } = await supabase
       .from('assessment_results')
       .select('ai_analysis')
@@ -32,6 +42,10 @@ export async function getCachedAnalysis(resultId: string): Promise<BehaviorAnaly
     // Return cached analysis if available
     if (data?.ai_analysis) {
       console.log('Retrieved cached behavior analysis for result:', resultId);
+      
+      // Update in-memory cache for future use
+      analysisCache.set(resultId, data.ai_analysis as BehaviorAnalysisResponse);
+      
       return data.ai_analysis as BehaviorAnalysisResponse;
     }
     
@@ -54,7 +68,10 @@ export async function cacheAnalysis(
   try {
     console.log('Caching behavior analysis for result:', resultId);
     
-    // Update the assessment result with AI analysis
+    // First update in-memory cache
+    analysisCache.set(resultId, analysis);
+    
+    // Then update database
     const { error } = await supabase
       .from('assessment_results')
       .update({
@@ -86,7 +103,11 @@ function getTraitMetadata(id: number): {leftTrait: string, rightTrait: string, c
     3: {leftTrait: 'Autônomo', rightTrait: 'Trabalho em equipe', category: 'collaboration'},
     4: {leftTrait: 'Diplomático', rightTrait: 'Honesto', category: 'communication'},
     5: {leftTrait: 'Criativo', rightTrait: 'Consistente', category: 'innovation'},
-    // More trait metadata...
+    6: {leftTrait: 'Leal', rightTrait: 'Pragmático', category: 'values'},
+    7: {leftTrait: 'Assume riscos', rightTrait: 'Cauteloso', category: 'risk-taking'},
+    8: {leftTrait: 'Assertivo', rightTrait: 'Modesto', category: 'communication'},
+    9: {leftTrait: 'Rápido', rightTrait: 'Analítico', category: 'decision-making'},
+    10: {leftTrait: 'Emocional', rightTrait: 'Racional', category: 'thinking-style'}
   };
   
   return traitMetadata[id] || {leftTrait: 'Unknown', rightTrait: 'Unknown', category: 'general'};
@@ -113,6 +134,158 @@ function prepareTraitMetadata(traits: Record<number, number>): Record<number, an
   return metadata;
 }
 
+// Queue system for API calls to prevent duplicate/parallel requests
+let processingQueue = false;
+const pendingAnalysisRequests: Array<{
+  resolve: (value: BehaviorAnalysisResponse | null) => void;
+  reject: (reason: any) => void;
+  request: {
+    resultId: string;
+    traits: Record<number, number>;
+    frequencyTraits?: Record<string, number>;
+    userName?: string;
+    forceRefresh: boolean;
+  };
+}> = [];
+
+/**
+ * Process the next analysis request in the queue
+ */
+async function processNextInQueue() {
+  if (processingQueue || pendingAnalysisRequests.length === 0) {
+    return;
+  }
+  
+  processingQueue = true;
+  
+  try {
+    const next = pendingAnalysisRequests.shift();
+    if (!next) {
+      processingQueue = false;
+      return;
+    }
+    
+    const { resolve, reject, request } = next;
+    
+    try {
+      // Process the request without the queue to avoid recursion
+      const result = await processAnalysisRequest(
+        request.resultId,
+        request.traits,
+        request.frequencyTraits,
+        request.userName,
+        request.forceRefresh
+      );
+      
+      resolve(result);
+    } catch (error) {
+      reject(error);
+    }
+  } finally {
+    processingQueue = false;
+    
+    // Process next in queue if any
+    if (pendingAnalysisRequests.length > 0) {
+      setTimeout(processNextInQueue, 500); // Small delay to prevent tight loop
+    }
+  }
+}
+
+/**
+ * Actual processing logic for behavior analysis
+ */
+async function processAnalysisRequest(
+  resultId: string,
+  traits: Record<number, number>,
+  frequencyTraits?: Record<string, number>,
+  userName?: string,
+  forceRefresh: boolean = false
+): Promise<BehaviorAnalysisResponse | null> {
+  console.log(`Processing analysis request for result ${resultId}${forceRefresh ? ' (forced refresh)' : ''}`);
+  
+  // Skip cache if force refresh requested
+  if (!forceRefresh) {
+    // Check cache first
+    const cachedAnalysis = await getCachedAnalysis(resultId);
+    if (cachedAnalysis) {
+      console.log('Using cached analysis');
+      return cachedAnalysis;
+    }
+    console.log('No cached analysis found, generating new one');
+  } else {
+    console.log('Bypassing cache as refresh was requested');
+  }
+  
+  // Prepare data for API call
+  const traitMetadata = prepareTraitMetadata(traits);
+  
+  // Generate the prompt for OpenAI
+  const prompt = generateBehaviorAnalysisPrompt(
+    traits,
+    traitMetadata,
+    frequencyTraits,
+    userName
+  );
+  
+  // Implement retry logic
+  const maxRetries = 2;
+  let lastError = null;
+  
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      console.log(`API call attempt ${attempt + 1}/${maxRetries}`);
+      
+      // Call OpenAI API
+      const responseText = await callOpenAICompletion({
+        prompt: prompt
+      });
+      
+      // Parse the response
+      const parsedResponse = parseBehaviorAnalysisResponse(responseText);
+      
+      // Validate response structure
+      if (!parsedResponse || !parsedResponse.summary) {
+        console.error('Invalid response structure from OpenAI:', parsedResponse);
+        continue; // Try again
+      }
+      
+      console.log('Received valid behavior analysis from OpenAI');
+      
+      // Cache the successful result
+      await cacheAnalysis(resultId, parsedResponse);
+      
+      return parsedResponse;
+    } catch (error: any) {
+      console.warn(`Attempt ${attempt + 1} failed:`, error);
+      lastError = error;
+      
+      // If it's a rate limit error, no point in immediate retry
+      if (error?.message?.includes('Rate limit')) {
+        throw error; // Propagate rate limit error
+      }
+      
+      // Wait before retry (exponential backoff)
+      if (attempt < maxRetries - 1) {
+        const delay = Math.pow(2, attempt) * 1000; // 1s, 2s
+        console.log(`Retrying in ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+  
+  // All retries failed
+  console.error('All API call attempts failed:', lastError);
+  
+  // Fall back to example data
+  console.log('Using fallback example analysis');
+  toast.error('Não foi possível gerar análise personalizada. Usando análise de exemplo.');
+  
+  // Cache the example response so we don't try again
+  await cacheAnalysis(resultId, exampleAnalysisResponse);
+  
+  return exampleAnalysisResponse;
+}
+
 /**
  * Primary function to get behavior analysis - first checks cache, then generates if needed
  * Implements retry logic for API calls and proper caching
@@ -133,85 +306,26 @@ export async function getBehaviorAnalysis(
       return null;
     }
     
-    // Skip cache if force refresh requested
-    if (!forceRefresh) {
-      // Check cache first
-      const cachedAnalysis = await getCachedAnalysis(resultId);
-      if (cachedAnalysis) {
-        console.log('Using cached analysis');
-        return cachedAnalysis;
-      }
-      console.log('No cached analysis found, generating new one');
-    } else {
-      console.log('Bypassing cache as refresh was requested');
-    }
-    
-    // Prepare data for API call
-    const traitMetadata = prepareTraitMetadata(traits);
-    
-    // Generate the prompt for OpenAI
-    const prompt = generateBehaviorAnalysisPrompt(
-      traits,
-      traitMetadata,
-      frequencyTraits,
-      userName
-    );
-    
-    // Implement retry logic
-    const maxRetries = 3;
-    let lastError = null;
-    
-    for (let attempt = 0; attempt < maxRetries; attempt++) {
-      try {
-        console.log(`API call attempt ${attempt + 1}/${maxRetries}`);
-        
-        // Call OpenAI API
-        const responseText = await callOpenAICompletion({
-          prompt: prompt
-        });
-        
-        // Parse the response
-        const parsedResponse = parseBehaviorAnalysisResponse(responseText);
-        
-        // Validate response structure
-        if (!parsedResponse || !parsedResponse.summary) {
-          console.error('Invalid response structure from OpenAI:', parsedResponse);
-          continue; // Try again
+    // Use the queue system to prevent parallel API calls
+    return new Promise((resolve, reject) => {
+      // Add to queue
+      pendingAnalysisRequests.push({
+        resolve,
+        reject,
+        request: {
+          resultId,
+          traits,
+          frequencyTraits,
+          userName,
+          forceRefresh
         }
-        
-        console.log('Received valid behavior analysis from OpenAI');
-        
-        // Cache the successful result
-        await cacheAnalysis(resultId, parsedResponse);
-        
-        return parsedResponse;
-      } catch (error) {
-        console.warn(`Attempt ${attempt + 1} failed:`, error);
-        lastError = error;
-        
-        // Wait before retry (exponential backoff)
-        if (attempt < maxRetries - 1) {
-          const delay = Math.pow(2, attempt) * 1000; // 1s, 2s, 4s
-          console.log(`Retrying in ${delay}ms...`);
-          await new Promise(resolve => setTimeout(resolve, delay));
-        }
+      });
+      
+      // Start processing if not already
+      if (!processingQueue) {
+        processNextInQueue();
       }
-    }
-    
-    // All retries failed
-    console.error('All API call attempts failed:', lastError);
-    
-    // Fall back to example data in production
-    if (import.meta.env.PROD) {
-      console.log('Using fallback example analysis');
-      
-      // Cache the example response so we don't try again
-      await cacheAnalysis(resultId, exampleAnalysisResponse);
-      
-      return exampleAnalysisResponse;
-    }
-    
-    return null;
+    });
   } catch (error) {
     console.error('Error in getBehaviorAnalysis:', error);
     return null;

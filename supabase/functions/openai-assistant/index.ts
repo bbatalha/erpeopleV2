@@ -1,146 +1,121 @@
-// Follow this setup guide to integrate the Deno language server with your editor:
-// https://deno.land/manual/getting_started/setup_your_environment
-// This enables autocompletion, go to definition, etc.
-
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import OpenAI from "https://esm.sh/openai@4.20.0";
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
+import { OpenAI } from 'https://esm.sh/openai@4.24.1'
 
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
 
 serve(async (req) => {
   // Handle CORS preflight requests
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders })
   }
 
   try {
-    const apiKey = Deno.env.get("OPENAI_API_KEY");
-    if (!apiKey) {
-      throw new Error("OPENAI_API_KEY is not set");
-    }
-
     const openai = new OpenAI({
-      apiKey: apiKey,
-    });
+      apiKey: Deno.env.get('OPENAI_API_KEY'),
+    })
+
+    const { action, threadId, runId, userPrompt, systemPrompt } = await req.json()
 
     // Get the assistant ID from environment variables
-    const ASSISTANT_ID = Deno.env.get("OPENAI_ASSISTANT_ID");
-    if (!ASSISTANT_ID) {
-      throw new Error("OPENAI_ASSISTANT_ID is not set");
+    const assistantId = Deno.env.get('OPENAI_ASSISTANT_ID')
+    if (!assistantId) {
+      throw new Error('OPENAI_ASSISTANT_ID is not set in environment variables')
     }
-
-    // Parse the request body
-    const requestData = await req.json();
-    const { action, threadId, runId, systemPrompt, userPrompt } = requestData;
-
-    if (!action) {
-      throw new Error("Missing required parameter: action");
-    }
-
-    console.log(`Processing action: ${action}`);
-    let result = {};
 
     switch (action) {
-      case "createThread": {
+      case 'createThread': {
         if (!userPrompt) {
-          throw new Error("Missing required parameter: userPrompt");
+          throw new Error('User prompt is required')
         }
 
-        try {
-          // Create a new thread
-          const thread = await openai.beta.threads.create();
-          console.log("Thread created:", thread.id);
+        // Create a new thread with the initial user message
+        const thread = await openai.beta.threads.create({
+          messages: [
+            {
+              role: 'user',
+              content: userPrompt,
+            },
+          ],
+        })
 
-          // Add a message to the thread
-          await openai.beta.threads.messages.create(thread.id, {
-            role: "user",
-            content: userPrompt,
-          });
-          console.log("Message added to thread");
-
-          result = { threadId: thread.id };
-        } catch (error) {
-          console.error("Error in createThread:", error);
-          throw new Error(`Failed to create thread: ${error.message}`);
-        }
-        break;
+        // Return the thread ID
+        return new Response(
+          JSON.stringify({ threadId: thread.id }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
       }
 
-      case "runAssistant": {
+      case 'runAssistant': {
         if (!threadId) {
-          throw new Error("Missing required parameter: threadId");
+          throw new Error('Thread ID is required')
         }
 
-        try {
-          // Run the assistant on the thread
-          console.log(`Running assistant ${ASSISTANT_ID} on thread ${threadId}`);
-          const run = await openai.beta.threads.runs.create(threadId, {
-            assistant_id: ASSISTANT_ID,
-          });
-          console.log("Run created:", run.id);
+        // Start the assistant run
+        const run = await openai.beta.threads.runs.create(
+          threadId, 
+          { 
+            assistant_id: assistantId,
+            // Using gpt-4o instead of gpt-4-turbo-preview
+            model: 'gpt-4o' 
+          }
+        )
 
-          result = { runId: run.id, status: run.status };
-        } catch (error) {
-          console.error("Error in runAssistant:", error);
-          throw new Error(`Failed to run assistant: ${error.message}`);
-        }
-        break;
+        return new Response(
+          JSON.stringify({ runId: run.id, status: run.status }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
       }
 
-      case "checkRunStatus": {
+      case 'checkRunStatus': {
         if (!threadId || !runId) {
-          throw new Error("Missing required parameters: threadId and/or runId");
+          throw new Error('Thread ID and Run ID are required')
         }
 
-        try {
-          // Get the run status
-          console.log(`Checking run status for ${runId} on thread ${threadId}`);
-          const run = await openai.beta.threads.runs.retrieve(threadId, runId);
-          console.log("Run status:", run.status);
+        // Check the status of the assistant run
+        const run = await openai.beta.threads.runs.retrieve(threadId, runId)
 
-          result = { status: run.status };
-        } catch (error) {
-          console.error("Error in checkRunStatus:", error);
-          throw new Error(`Failed to check run status: ${error.message}`);
-        }
-        break;
+        return new Response(
+          JSON.stringify({ status: run.status }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
       }
 
-      case "getMessages": {
+      case 'getMessages': {
         if (!threadId) {
-          throw new Error("Missing required parameter: threadId");
+          throw new Error('Thread ID is required')
         }
 
-        try {
-          // Get the messages from the thread
-          console.log(`Getting messages from thread ${threadId}`);
-          const messages = await openai.beta.threads.messages.list(threadId);
-          console.log(`Retrieved ${messages.data.length} messages`);
+        // Retrieve messages from the thread
+        const messages = await openai.beta.threads.messages.list(threadId)
 
-          result = { messages: messages.data };
-        } catch (error) {
-          console.error("Error in getMessages:", error);
-          throw new Error(`Failed to get messages: ${error.message}`);
-        }
-        break;
+        return new Response(
+          JSON.stringify({ messages: messages.data }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
       }
 
       default:
-        throw new Error(`Unknown action: ${action}`);
+        throw new Error(`Unsupported action: ${action}`)
     }
-
-    return new Response(JSON.stringify(result), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
   } catch (error) {
-    console.error("Error processing request:", error);
-
-    return new Response(JSON.stringify({ error: error.message }), {
-      status: 400,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    console.error('Error in OpenAI Assistant Edge Function:', error)
+    
+    return new Response(
+      JSON.stringify({ 
+        error: error.message || 'An error occurred during the OpenAI request',
+        status: 'error',
+        timestamp: new Date().toISOString()
+      }),
+      { 
+        status: 500, 
+        headers: { 
+          ...corsHeaders,
+          'Content-Type': 'application/json' 
+        } 
+      }
+    )
   }
-});
+})

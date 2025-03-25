@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
-import { Save, AlertTriangle, CheckCircle, KeyRound, GitMerge } from 'lucide-react'
+import { Save, AlertTriangle, CheckCircle, KeyRound, GitMerge, RefreshCw } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { checkOpenAIAvailability } from '../lib/openai'
+import { toast } from 'react-hot-toast'
+import { repairBehaviorAnalysis } from '../lib/api'
 
 export function Settings() {
   const { user } = useAuth()
@@ -15,6 +17,8 @@ export function Settings() {
   const [apiKeyInput, setApiKeyInput] = useState('')
   const [openAIAvailable, setOpenAIAvailable] = useState<boolean | null>(null)
   const [checkingApi, setCheckingApi] = useState(false)
+  const [repairing, setRepairing] = useState(false)
+  const [isAdmin, setIsAdmin] = useState(false)
 
   // Check if OpenAI is already configured
   useEffect(() => {
@@ -33,6 +37,29 @@ export function Settings() {
 
     checkAPIStatus();
   }, []);
+  
+  // Check if user is admin
+  useEffect(() => {
+    if (!user) return;
+    
+    const checkAdminStatus = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', user.id)
+          .single();
+          
+        if (error) throw error;
+        setIsAdmin(data?.role === 'admin');
+      } catch (err) {
+        console.error('Error checking admin status:', err);
+        setIsAdmin(false);
+      }
+    };
+    
+    checkAdminStatus();
+  }, [user]);
 
   // Load user settings from database
   useEffect(() => {
@@ -88,6 +115,7 @@ export function Settings() {
       if (error) throw error
       
       setSuccess(true)
+      toast.success('Configurações salvas com sucesso!');
       
       // Auto-hide success message after 3 seconds
       setTimeout(() => {
@@ -96,6 +124,7 @@ export function Settings() {
     } catch (err) {
       console.error('Error saving settings:', err)
       setError('Erro ao salvar configurações. Por favor, tente novamente.')
+      toast.error('Erro ao salvar configurações');
     } finally {
       setLoading(false)
     }
@@ -109,17 +138,32 @@ export function Settings() {
       
       if (available) {
         setSuccess(true);
+        toast.success('OpenAI API conectada com sucesso!');
         setTimeout(() => setSuccess(false), 3000);
       } else {
-        setError('OpenAI API is not properly configured. Please check with your administrator.');
+        setError('OpenAI API não está configurada corretamente. Por favor, contate o administrador.');
+        toast.error('Falha na conexão com OpenAI API');
         setTimeout(() => setError(null), 5000);
       }
     } catch (err) {
       console.error('Error testing OpenAI:', err);
-      setError('Error testing OpenAI API connection');
+      setError('Erro ao testar a conexão com OpenAI API');
+      toast.error('Erro ao testar OpenAI API');
       setTimeout(() => setError(null), 5000);
     } finally {
       setCheckingApi(false);
+    }
+  };
+  
+  const handleRepairAnalysis = async () => {
+    setRepairing(true);
+    try {
+      await repairBehaviorAnalysis();
+    } catch (err) {
+      console.error('Error repairing behavior analysis:', err);
+      toast.error('Falha ao reparar análises');
+    } finally {
+      setRepairing(false);
     }
   };
 
@@ -243,16 +287,40 @@ export function Settings() {
                 
                 <p className="text-sm text-gray-600 mb-4">
                   OpenAI integration enables enhanced behavioral analysis and personalized insights.
+                  Current model: <span className="font-medium">gpt-4o</span>
                 </p>
                 
-                <button
-                  type="button"
-                  onClick={handleTestOpenAI}
-                  disabled={checkingApi}
-                  className="inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                >
-                  {checkingApi ? 'Testing...' : 'Test Connection'}
-                </button>
+                <div className="flex space-x-3">
+                  <button
+                    type="button"
+                    onClick={handleTestOpenAI}
+                    disabled={checkingApi}
+                    className="inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+                  >
+                    {checkingApi ? 'Testing...' : 'Test Connection'}
+                  </button>
+                  
+                  {isAdmin && (
+                    <button
+                      type="button"
+                      onClick={handleRepairAnalysis}
+                      disabled={repairing}
+                      className="inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+                    >
+                      {repairing ? (
+                        <>
+                          <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                          Reparando...
+                        </>
+                      ) : (
+                        <>
+                          <RefreshCw className="w-4 h-4 mr-2" />
+                          Reparar Análises
+                        </>
+                      )}
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           </div>

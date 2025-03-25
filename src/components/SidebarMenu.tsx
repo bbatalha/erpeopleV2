@@ -1,16 +1,32 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { Brain, LayoutDashboard, UserCircle, History, Settings, LogOut, Shield } from 'lucide-react'
+import { Brain, LayoutDashboard, UserCircle, History, Settings, LogOut, Shield, X } from 'lucide-react'
 import { Sidebar, SidebarBody, SidebarLink } from './ui/Sidebar'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
 
-export function SidebarMenu() {
+interface SidebarMenuProps {
+  open: boolean
+  setOpen: React.Dispatch<React.SetStateAction<boolean>>
+}
+
+export function SidebarMenu({ open, setOpen }: SidebarMenuProps) {
   const navigate = useNavigate()
   const location = useLocation()
   const { signOut, user, isLoggingOut } = useAuth()
-  const [open, setOpen] = useState(false)
   const [isAdmin, setIsAdmin] = useState(false)
+  const [isMobile, setIsMobile] = useState(false)
+
+  useEffect(() => {
+    setIsMobile(window.innerWidth < 768)
+    
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768)
+    }
+    
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
 
   useEffect(() => {
     const checkAdminStatus = async () => {
@@ -82,25 +98,45 @@ export function SidebarMenu() {
   ]
 
   return (
-    <Sidebar open={open} setOpen={setOpen}>
-      <SidebarBody className="justify-between gap-10">
-        <div className="flex flex-col flex-1 overflow-y-auto overflow-x-hidden">
-          <Logo open={open} />
-          <div className="mt-8 flex flex-col gap-2">
-            {links.map((link, idx) => (
-              <SidebarLink
-                key={idx}
-                link={{
-                  ...link,
-                  onClick: link.label.includes('Logout') ? handleSignOut : undefined,
-                  disabled: isLoggingOut && link.label.includes('Logout')
-                }}
-              />
-            ))}
+    <div 
+      id="sidebar-menu"
+      className={`fixed inset-y-0 left-0 z-40 ${open ? 'translate-x-0' : '-translate-x-full'} 
+        transition-transform duration-300 ease-in-out md:translate-x-0`}
+    >
+      <Sidebar open={open} setOpen={setOpen}>
+        <SidebarBody className="justify-between gap-10">
+          <div className="flex flex-col flex-1 overflow-y-auto overflow-x-hidden">
+            <div className="flex items-center justify-between pt-4 px-4">
+              <Logo open={open} />
+              
+              {/* Close button (mobile only) */}
+              {isMobile && (
+                <button
+                  onClick={() => setOpen(false)}
+                  className="p-1 rounded-full text-gray-400 hover:text-gray-500 focus:outline-none"
+                  aria-label="Close menu"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              )}
+            </div>
+            
+            <div className="mt-8 flex flex-col gap-2">
+              {links.map((link, idx) => (
+                <SidebarLink
+                  key={idx}
+                  link={{
+                    ...link,
+                    onClick: link.label.includes('Logout') ? handleSignOut : undefined,
+                    disabled: isLoggingOut && link.label.includes('Logout')
+                  }}
+                />
+              ))}
+            </div>
           </div>
-        </div>
-      </SidebarBody>
-    </Sidebar>
+        </SidebarBody>
+      </Sidebar>
+    </div>
   )
 }
 

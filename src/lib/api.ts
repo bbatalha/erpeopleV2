@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { toast } from 'react-hot-toast';
 
 /**
  * Utility function to handle Supabase API calls with retry logic
@@ -106,6 +107,30 @@ export async function fetchUserAssessmentHistory(userId: string) {
     
     return data || [];
   });
+}
+
+/**
+ * Repair behavior analysis data that may be corrupted
+ */
+export async function repairBehaviorAnalysis() {
+  try {
+    // Import the repair function dynamically to avoid circular dependencies
+    const { repairBrokenAnalysisData } = await import('../services/reportService');
+    
+    const result = await repairBrokenAnalysisData();
+    
+    if (result.fixed > 0) {
+      toast.success(`Repaired ${result.fixed} analysis records`);
+    } else {
+      toast.success('No analysis records needed repair');
+    }
+    
+    return result;
+  } catch (error) {
+    console.error('Error repairing behavior analysis:', error);
+    toast.error('Failed to repair analysis data');
+    throw error;
+  }
 }
 
 /**

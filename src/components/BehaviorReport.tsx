@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { Download, Brain, Sparkles, RefreshCw, AlertTriangle } from 'lucide-react'
+import { Download, Brain, AlertTriangle } from 'lucide-react'
 import html2canvas from 'html2canvas'
 import { jsPDF } from 'jspdf'
 import { traitQuestions, frequencyQuestions } from '../utils/behaviorQuestions'
@@ -57,7 +57,6 @@ export function BehaviorReport({ results, questions, userName, resultId }: Behav
   const reportRef = useRef<HTMLDivElement>(null)
   const frequencyLabels = ['Nunca', 'Raramente', 'Às vezes', 'Frequentemente', 'Sempre']
   const { user } = useAuth()
-  const [generatingNewAnalysis, setGeneratingNewAnalysis] = useState(false)
   const [loadingAttempts, setLoadingAttempts] = useState(0)
 
   // Debug logging to help identify issues
@@ -119,41 +118,6 @@ export function BehaviorReport({ results, questions, userName, resultId }: Behav
     
     fetchAiAnalysis();
   }, [results.traits, results.frequencies, results.aiAnalysis, userName, resultId]);
-
-  // Generate new analysis function (when user explicitly requests a new analysis)
-  const generateNewAnalysis = async () => {
-    if (!user || !resultId || !results.traits) return;
-    
-    try {
-      setGeneratingNewAnalysis(true);
-      setLoadingAi(true);
-      setError(null);
-      
-      // Force a new API call by passing forceRefresh=true
-      const analysis = await getOpenAIBehaviorAnalysis(
-        results.traits,
-        results.frequencies,
-        userName,
-        resultId,
-        true // Force refresh
-      );
-      
-      if (analysis) {
-        setAiAnalysis(analysis);
-        setAiSaved(true); // New analysis is automatically saved in the service
-        toast.success("Nova análise comportamental gerada com sucesso!");
-      } else {
-        throw new Error("Falha ao gerar nova análise");
-      }
-    } catch (err) {
-      console.error("Error generating new AI analysis:", err);
-      setError("Falha ao gerar nova análise. Por favor, tente novamente.");
-      toast.error("Erro ao gerar nova análise comportamental");
-    } finally {
-      setLoadingAi(false);
-      setGeneratingNewAnalysis(false);
-    }
-  };
 
   // Guard against undefined results
   if (!results) {
@@ -324,34 +288,6 @@ export function BehaviorReport({ results, questions, userName, resultId }: Behav
                 <p className="text-gray-700 leading-relaxed">
                   {aiAnalysis.summary}
                 </p>
-                
-                {/* Controls for regenerating analysis */}
-                {resultId && (
-                  <div className="flex flex-wrap justify-center space-x-2 pt-2">
-                     {/* Generate new analysis button */}
-                     <button
-                      onClick={generateNewAnalysis}
-                      disabled={generatingNewAnalysis || loadingAi}
-                      className={`inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md ${
-                        generatingNewAnalysis || loadingAi
-                          ? 'bg-gray-100 text-gray-500 border border-gray-200 cursor-not-allowed'
-                          : 'bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200'
-                      }`}
-                    >
-                      {generatingNewAnalysis || loadingAi ? (
-                        <>
-                          <RefreshCw className="animate-spin -ml-1 mr-2 h-4 w-4 text-gray-500" />
-                          Gerando...
-                        </>
-                      ) : (
-                        <>
-                          <RefreshCw className="w-4 h-4 mr-1.5" />
-                          Gerar nova análise
-                        </>
-                      )}
-                    </button>
-                  </div>
-                )}
               </div>
             ) : (
               <p className="text-gray-700 leading-relaxed">
@@ -582,24 +518,4 @@ export function BehaviorReport({ results, questions, userName, resultId }: Behav
       </div>
     </div>
   )
-}
-
-// Simple refresh icon component for the "Generate new analysis" button
-function RefreshIcon({ className }: { className?: string }) {
-  return (
-    <svg 
-      className={className} 
-      fill="none" 
-      stroke="currentColor" 
-      viewBox="0 0 24 24" 
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <path 
-        strokeLinecap="round" 
-        strokeLinejoin="round" 
-        strokeWidth={2} 
-        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" 
-      />
-    </svg>
-  );
 }

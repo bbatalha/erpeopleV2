@@ -93,8 +93,6 @@ const DesktopSidebar = ({
       animate={{
         width: animate ? (open ? '300px' : '60px') : '300px',
       }}
-      onMouseEnter={() => setOpen(true)}
-      onMouseLeave={() => setOpen(false)}
       {...props}
     >
       {children}
@@ -110,44 +108,38 @@ const MobileSidebar = ({
   const { open, setOpen } = useSidebar()
   return (
     <>
-      <div
-        className={cn(
-          'h-16 sticky top-0 px-4 flex flex-row md:hidden items-center justify-between bg-neutral-100 dark:bg-neutral-800 w-full z-10'
-        )}
-        {...props}
-      >
-        <div className="flex justify-end z-20 w-full">
-          <Menu
-            className="text-neutral-800 dark:text-neutral-200 cursor-pointer"
-            onClick={() => setOpen(!open)}
-          />
-        </div>
-        <AnimatePresence>
-          {open && (
+      <AnimatePresence>
+        {open && (
+          <>
+            {/* Overlay */}
             <motion.div
-              initial={{ x: '-100%', opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              exit={{ x: '-100%', opacity: 0 }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 0.5 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black md:hidden z-30"
+              onClick={() => setOpen(false)}
+            />
+            
+            {/* Sidebar */}
+            <motion.div
+              initial={{ x: '-100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '-100%' }}
               transition={{
                 duration: 0.3,
                 ease: 'easeInOut',
               }}
               className={cn(
-                'fixed h-full w-full inset-0 bg-white dark:bg-neutral-900 p-10 z-[100] flex flex-col justify-between',
+                'fixed h-full w-[260px] inset-y-0 left-0 bg-white dark:bg-neutral-800 p-4 z-[40] flex flex-col',
                 className
               )}
+              {...props}
             >
-              <div
-                className="absolute right-10 top-10 z-50 text-neutral-800 dark:text-neutral-200 cursor-pointer"
-                onClick={() => setOpen(!open)}
-              >
-                <X />
-              </div>
               {children}
             </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
+          </>
+        )}
+      </AnimatePresence>
     </>
   )
 }
@@ -172,6 +164,7 @@ export const SidebarLink = ({
         className={cn(
           'flex items-center justify-start gap-2 group/sidebar py-2 w-full text-left',
           link.disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer',
+          'hover:bg-neutral-200 dark:hover:bg-neutral-700 rounded-md px-2 transition-colors',
           className
         )}
         aria-label={link.label}
@@ -196,6 +189,7 @@ export const SidebarLink = ({
       to={link.href}
       className={cn(
         'flex items-center justify-start gap-2 group/sidebar py-2',
+        'hover:bg-neutral-200 dark:hover:bg-neutral-700 rounded-md px-2 transition-colors',
         className
       )}
       {...props}

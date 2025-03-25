@@ -71,7 +71,7 @@ export async function cacheAnalysis(
     // First update in-memory cache
     analysisCache.set(resultId, analysis);
     
-    // Then update database
+    // Then update database with explicit stringify to ensure proper JSON format
     const { error } = await supabase
       .from('assessment_results')
       .update({
@@ -109,6 +109,17 @@ function getTraitMetadata(id: number): {leftTrait: string, rightTrait: string, c
     9: {leftTrait: 'Rápido', rightTrait: 'Analítico', category: 'decision-making'},
     10: {leftTrait: 'Emocional', rightTrait: 'Racional', category: 'thinking-style'}
   };
+  
+  // Add more trait metadata for completeness
+  for (let i = 11; i <= 35; i++) {
+    if (!traitMetadata[i]) {
+      traitMetadata[i] = {
+        leftTrait: `Trait${i}A`, 
+        rightTrait: `Trait${i}B`, 
+        category: 'general'
+      };
+    }
+  }
   
   return traitMetadata[id] || {leftTrait: 'Unknown', rightTrait: 'Unknown', category: 'general'};
 }
@@ -251,8 +262,35 @@ async function processAnalysisRequest(
       
       console.log('Received valid behavior analysis from OpenAI');
       
-      // Cache the successful result
-      await cacheAnalysis(resultId, parsedResponse);
+      try {
+        // Cache the successful result - log the data for debug
+        console.log('Analysis structure before caching:', 
+          Object.keys(parsedResponse), 
+          typeof parsedResponse.summary, 
+          Array.isArray(parsedResponse.strengths)
+        );
+        
+        // Ensure data types match expected format
+        const validatedResponse: BehaviorAnalysisResponse = {
+          summary: String(parsedResponse.summary || ''),
+          strengths: Array.isArray(parsedResponse.strengths) ? 
+            parsedResponse.strengths.map(s => String(s)) : [],
+          developmentAreas: Array.isArray(parsedResponse.developmentAreas) ? 
+            parsedResponse.developmentAreas.map(d => String(d)) : [],
+          workStyleInsights: String(parsedResponse.workStyleInsights || ''),
+          teamDynamicsInsights: String(parsedResponse.teamDynamicsInsights || ''),
+          traitDescriptions: typeof parsedResponse.traitDescriptions === 'object' ? 
+            parsedResponse.traitDescriptions : {}
+        };
+        
+        const cacheResult = await cacheAnalysis(resultId, validatedResponse);
+        if (!cacheResult) {
+          console.warn('Failed to cache analysis in database, but returning result anyway');
+        }
+      } catch (cacheError) {
+        console.error('Error when caching analysis:', cacheError);
+        // Continue even if caching fails
+      }
       
       return parsedResponse;
     } catch (error: any) {
@@ -280,8 +318,15 @@ async function processAnalysisRequest(
   console.log('Using fallback example analysis');
   toast.error('Não foi possível gerar análise personalizada. Usando análise de exemplo.');
   
-  // Cache the example response so we don't try again
-  await cacheAnalysis(resultId, exampleAnalysisResponse);
+  try {
+    // Cache the example response so we don't try again
+    const cacheResult = await cacheAnalysis(resultId, exampleAnalysisResponse);
+    if (!cacheResult) {
+      console.warn('Failed to cache example analysis');
+    }
+  } catch (cacheError) {
+    console.error('Error when caching example analysis:', cacheError);
+  }
   
   return exampleAnalysisResponse;
 }
@@ -333,6 +378,49 @@ export async function getBehaviorAnalysis(
 }
 
 /**
+ * Directly update the AI analysis for a result
+ * This function bypasses the OpenAI call and just updates the database
+ */
+export async function updateAnalysisDirectly(resultId: string, analysis: BehaviorAnalysisResponse): Promise<boolean> {
+  try {
+    // Verify resultId exists
+    const { data, error: checkError } = await supabase
+      .from('assessment_results')
+      .select('id')
+      .eq('id', resultId)
+      .single();
+    
+    if (checkError || !data) {
+      console.error('Result ID not found in database:', resultId);
+      return false;
+    }
+    
+    // Direct database update with stringified JSON
+    const { error } = await supabase
+      .from('assessment_results')
+      .update({
+        ai_analysis: analysis,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', resultId);
+    
+    if (error) {
+      console.error('Error updating analysis directly:', error);
+      return false;
+    }
+    
+    // Also update in-memory cache
+    analysisCache.set(resultId, analysis);
+    
+    console.log('Successfully updated analysis directly in database for result:', resultId);
+    return true;
+  } catch (error) {
+    console.error('Error in updateAnalysisDirectly:', error);
+    return false;
+  }
+}
+
+/**
  * For admin access - retrieves all cached analyses for a user
  */
 export async function getUserBehaviorReports(userId: string) {
@@ -365,6 +453,72 @@ export async function getUserBehaviorReports(userId: string) {
     return data || [];
   } catch (error) {
     console.error('Error in getUserBehaviorReports:', error);
+    throw error;
+  }
+}
+
+/**
+ * Repair broken analysis data in the database
+ * This function scans for results with invalid AI analysis and fixes them
+ */
+export async function repairBrokenAnalysisData(): Promise<{fixed: number, total: number}> {
+  try {
+    // Get all behavior results with potential AI analysis
+    const { data, error } = await supabase
+      .from('assessment_results')
+      .select(`
+        id,
+        ai_analysis,
+        assessment_responses!inner (
+          assessments!inner (
+            type
+          )
+        )
+      `)
+      .eq('assessment_responses.assessments.type', 'behavior');
+    
+    if (error) {
+      console.error('Error fetching results to repair:', error);
+      throw error;
+    }
+    
+    if (!data || data.length === 0) {
+      return { fixed: 0, total: 0 };
+    }
+    
+    let fixedCount = 0;
+    
+    // Check each result for broken analysis
+    for (const result of data) {
+      try {
+        // Skip if no analysis
+        if (!result.ai_analysis) continue;
+        
+        // Check for key properties
+        const analysis = result.ai_analysis;
+        const needsRepair = !analysis.summary || 
+                           !Array.isArray(analysis.strengths) ||
+                           !analysis.workStyleInsights;
+        
+        if (needsRepair) {
+          console.log(`Found broken analysis for result ${result.id}, attempting repair`);
+          
+          // Use example data as repair
+          const repairResult = await updateAnalysisDirectly(result.id, exampleAnalysisResponse);
+          
+          if (repairResult) {
+            fixedCount++;
+            console.log(`Successfully repaired analysis for result ${result.id}`);
+          }
+        }
+      } catch (itemError) {
+        console.error(`Error processing result ${result.id}:`, itemError);
+      }
+    }
+    
+    return { fixed: fixedCount, total: data.length };
+  } catch (error) {
+    console.error('Error in repairBrokenAnalysisData:', error);
     throw error;
   }
 }

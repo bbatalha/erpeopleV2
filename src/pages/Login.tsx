@@ -43,21 +43,21 @@ export function Login() {
   }
 
   return (
-    <div className="flex min-h-[80vh] flex-col justify-center py-12 sm:px-6 lg:px-8">
+    <div className="flex min-h-[80vh] flex-col justify-center py-6 sm:py-12 px-4 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <div className="flex justify-center">
-          <Brain className="w-12 h-12 text-indigo-600" />
+          <Brain className="w-10 h-10 sm:w-12 sm:h-12 text-indigo-600" />
         </div>
-        <h2 className="mt-6 text-center text-3xl font-bold tracking-tight text-gray-900">
+        <h2 className="mt-4 sm:mt-6 text-center text-2xl sm:text-3xl font-bold tracking-tight text-gray-900">
           Entre na sua conta
         </h2>
       </div>
 
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg-white px-4 py-8 shadow sm:rounded-lg sm:px-10">
-          <form className="space-y-6" onSubmit={handleSubmit}>
+      <div className="mt-6 sm:mt-8 sm:mx-auto sm:w-full sm:max-w-md">
+        <div className="bg-white px-4 py-6 sm:py-8 shadow sm:rounded-lg sm:px-10">
+          <form className="space-y-5 sm:space-y-6" onSubmit={handleSubmit}>
             {error && (
-              <div className="rounded-md bg-red-50 p-4">
+              <div className="rounded-md bg-red-50 p-3 sm:p-4">
                 <p className="text-sm text-red-700">{error}</p>
               </div>
             )}
@@ -113,20 +113,20 @@ export function Login() {
             </button>
           </form>
 
-          <p className="mt-6 text-center text-sm text-gray-600">
-            <span className="block mb-2">
+          <div className="mt-6 text-center text-sm text-gray-600">
+            <p className="mb-2">
               Não tem uma conta?{' '}
               <Link to="/register" className="font-medium text-indigo-600 hover:text-indigo-500">
                 Registre-se aqui
               </Link>
-            </span>
-            <span>
+            </p>
+            <p>
               Esqueceu sua senha?{' '}
               <Link to="/forgot-password" className="font-medium text-indigo-600 hover:text-indigo-500">
                 Recuperar senha
               </Link>
-            </span>
-          </p>
+            </p>
+          </div>
         </div>
       </div>
     </div>

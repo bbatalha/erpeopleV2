@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { Brain } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
+import { toast } from 'react-hot-toast'
 
 export function Register() {
   const [email, setEmail] = useState('')
@@ -55,15 +56,7 @@ export function Register() {
         setError('')
         
         // Show success message
-        const successMessage = document.createElement('div')
-        successMessage.className = 'fixed bottom-4 right-4 bg-green-50 text-green-800 p-4 rounded-lg shadow-lg'
-        successMessage.innerHTML = `
-          <p class="font-medium">Registration successful!</p>
-          <p class="text-sm">We're setting up your profile with LinkedIn data...</p>
-        `
-        document.body.appendChild(successMessage)
-        setTimeout(() => successMessage.remove(), 5000)
-
+        toast.success('Registro realizado com sucesso! Configurando seu perfil...')
         navigate('/dashboard')
       } catch (err: any) {
         if (err.message?.includes('Database error')) {
@@ -82,21 +75,21 @@ export function Register() {
   }
 
   return (
-    <div className="flex min-h-[80vh] flex-col justify-center py-12 sm:px-6 lg:px-8">
+    <div className="flex min-h-[80vh] flex-col justify-center py-6 sm:py-12 px-4 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <div className="flex justify-center">
-          <Brain className="w-12 h-12 text-indigo-600" />
+          <Brain className="w-10 h-10 sm:w-12 sm:h-12 text-indigo-600" />
         </div>
-        <h2 className="mt-6 text-center text-3xl font-bold tracking-tight text-gray-900">
+        <h2 className="mt-4 sm:mt-6 text-center text-2xl sm:text-3xl font-bold tracking-tight text-gray-900">
           Crie sua conta
         </h2>
       </div>
 
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg-white px-4 py-8 shadow sm:rounded-lg sm:px-10">
-          <form className="space-y-6" onSubmit={handleSubmit}>
+      <div className="mt-6 sm:mt-8 sm:mx-auto sm:w-full sm:max-w-md">
+        <div className="bg-white px-4 py-6 sm:py-8 shadow sm:rounded-lg sm:px-10">
+          <form className="space-y-4 sm:space-y-6" onSubmit={handleSubmit}>
             {error && (
-              <div className="rounded-md bg-red-50 p-4">
+              <div className="rounded-md bg-red-50 p-3 sm:p-4">
                 <p className="text-sm text-red-700">{error}</p>
               </div>
             )}

@@ -41,26 +41,57 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const signUp = async (email: string, password: string, fullName: string, linkedinUrl: string) => {
-    const { data: authData, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          full_name: fullName,
-          linkedin_url: linkedinUrl
-        }
+    try {
+      // Validate inputs before sending to Supabase
+      if (!email || !password || !fullName || !linkedinUrl) {
+        throw new Error('Todos os campos são obrigatórios')
       }
-    })
 
-    if (error) throw error
-    
-    // Start LinkedIn profile fetch in background
-    if (authData.user) {
-      fetchLinkedInProfile(linkedinUrl).then(profile => {
-        if (profile) {
-          updateUserProfile(authData.user.id, profile)
+      // Make sure LinkedIn URL is properly formatted
+      if (!linkedinUrl.match(/^https:\/\/(www\.)?linkedin\.com\//)) {
+        throw new Error('URL do LinkedIn inválida')
+      }
+
+      // Clean up URL - remove trailing slashes
+      const cleanLinkedinUrl = linkedinUrl.trim().replace(/\/+$/, '')
+
+      const { data: authData, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: fullName,
+            linkedin_url: cleanLinkedinUrl
+          }
         }
       })
+
+      if (error) throw error
+      
+      if (!authData.user) {
+        throw new Error('Falha na criação do usuário')
+      }
+      
+      // Start LinkedIn profile fetch in background
+      if (authData.user) {
+        try {
+          const profile = await fetchLinkedInProfile(cleanLinkedinUrl)
+          if (profile) {
+            await updateUserProfile(authData.user.id, profile)
+          } else {
+            console.warn('Não foi possível buscar o perfil do LinkedIn:', cleanLinkedinUrl)
+          }
+        } catch (profileError) {
+          console.error('Erro ao buscar perfil do LinkedIn:', profileError)
+          // Continue anyway, as this is a background enhancement
+          toast.error('Não foi possível recuperar dados do LinkedIn. Você pode atualizar seu perfil mais tarde.')
+        }
+      }
+
+      return authData
+    } catch (err) {
+      console.error('Signup error:', err)
+      throw err
     }
   }
 

@@ -29,7 +29,7 @@ export async function fetchLinkedInProfile(linkedinUrl: string): Promise<LinkedI
       return null
     }
 
-    // Validate URL format
+    // Validate URL format - ensure it's properly formatted before sending to API
     if (!linkedinUrl.match(/^https:\/\/(www\.)?linkedin\.com\/.+/)) {
       console.warn('Invalid LinkedIn URL format', { linkedinUrl })
       return null
@@ -37,16 +37,19 @@ export async function fetchLinkedInProfile(linkedinUrl: string): Promise<LinkedI
 
     // Add timeout to fetch request
     const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 60000) // Increase timeout to 60s
+    const timeout = setTimeout(() => controller.abort(), 60000) // Increased timeout to 60s
 
     try {
       // Show loading state
       const loadingMessage = document.createElement('div')
       loadingMessage.className = 'fixed bottom-4 right-4 bg-blue-50 text-blue-800 p-4 rounded-lg shadow-lg z-50'
-      loadingMessage.innerHTML = 'Fetching LinkedIn profile data...'
+      loadingMessage.innerHTML = 'Buscando dados do LinkedIn...'
       document.body.appendChild(loadingMessage)
 
-      console.info('Fetching LinkedIn data for URL:', linkedinUrl)
+      console.info('Buscando dados do LinkedIn para URL:', linkedinUrl)
+
+      // Clean URL before sending
+      const cleanUrl = linkedinUrl.trim().replace(/\/+$/, '')
 
       const response = await fetch('https://hook.us2.make.com/co07l2dmk5hr92mw7nhm8cz3s02xeew0', {
         method: 'POST',
@@ -56,7 +59,7 @@ export async function fetchLinkedInProfile(linkedinUrl: string): Promise<LinkedI
           'Cache-Control': 'no-cache'
         },
         body: JSON.stringify({ 
-          linkedin_url: linkedinUrl.trim() 
+          linkedin_url: cleanUrl
         }),
         signal: controller.signal
       })
@@ -65,7 +68,19 @@ export async function fetchLinkedInProfile(linkedinUrl: string): Promise<LinkedI
       loadingMessage.remove()
 
       if (!response.ok) {
-        console.warn('Failed to fetch LinkedIn profile:', { status: response.status, statusText: response.statusText })
+        console.warn('Falha ao buscar perfil do LinkedIn:', { 
+          status: response.status, 
+          statusText: response.statusText 
+        })
+        
+        // Log detailed error
+        try {
+          const errorText = await response.text()
+          console.warn('LinkedIn API response error:', errorText)
+        } catch (e) {
+          console.warn('Could not read error response')
+        }
+        
         return null
       }
 
@@ -110,8 +125,11 @@ export async function fetchLinkedInProfile(linkedinUrl: string): Promise<LinkedI
         return null
       }
 
+      // Log success
+      console.info('LinkedIn profile fetched successfully for:', profile.full_name)
+
       return profile
-    } catch (fetchError) {
+    } catch (fetchError: any) {
       if (fetchError.name === 'AbortError') {
         console.warn('LinkedIn API request timed out', { error: fetchError })
         return null
@@ -172,6 +190,9 @@ export async function updateUserProfile(userId: string, profile: LinkedInProfile
       })
     )
 
+    // Log the update operation
+    console.info('Updating user profile:', userId)
+
     const { error: updateError } = await supabase
       .from('profiles')
       .update(cleanedData)
@@ -182,6 +203,7 @@ export async function updateUserProfile(userId: string, profile: LinkedInProfile
       return false
     }
 
+    console.info('User profile updated successfully')
     return true
   } catch (error) {
     console.warn('Error updating user profile:', { error })

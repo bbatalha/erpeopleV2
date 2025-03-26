@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { Brain } from 'lucide-react'
+import { Brain, Eye, EyeOff, AlertCircle } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { toast } from 'react-hot-toast'
 
@@ -12,6 +12,7 @@ export function Register() {
   const [linkedinError, setLinkedinError] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
   const navigate = useNavigate()
   const { signUp } = useAuth()
 
@@ -20,14 +21,24 @@ export function Register() {
       setLinkedinError('LinkedIn URL é obrigatória')
       return false
     }
-    if (!url.startsWith('https://www.linkedin.com/')) {
-      setLinkedinError('URL deve começar com https://www.linkedin.com/')
+    
+    // Ensure URL starts with https://www.linkedin.com/ or https://linkedin.com/
+    if (!url.match(/^https:\/\/(www\.)?linkedin\.com\//)) {
+      setLinkedinError('URL deve começar com https://www.linkedin.com/ ou https://linkedin.com/')
       return false
     }
+    
     if (url.length > 255) {
       setLinkedinError('URL muito longa')
       return false
     }
+    
+    // Ensure URL doesn't end with / or whitespace
+    if (url.match(/\/\s*$/)) {
+      setLinkedinError('URL não deve terminar com / ou espaço')
+      return false
+    }
+    
     setLinkedinError('')
     return true
   }
@@ -38,13 +49,30 @@ export function Register() {
       setLoading(true)
       setError('')
 
+      // Validate all required fields
+      if (!email || !password || !fullName || !linkedinUrl) {
+        setError('Todos os campos são obrigatórios')
+        setLoading(false)
+        return
+      }
+
+      // Validate email format
+      const emailRegex = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/
+      if (!emailRegex.test(email)) {
+        setError('Formato de e-mail inválido')
+        setLoading(false)
+        return
+      }
+
       // Validate password length
       if (password.length < 6) {
         setError('A senha deve ter pelo menos 6 caracteres')
+        setLoading(false)
         return
       }
 
       if (!validateLinkedinUrl(linkedinUrl)) {
+        setLoading(false)
         return
       }
 
@@ -59,19 +87,26 @@ export function Register() {
         toast.success('Registro realizado com sucesso! Configurando seu perfil...')
         navigate('/dashboard')
       } catch (err: any) {
+        console.error('Registration error:', err)
+        
         if (err.message?.includes('Database error')) {
           setError('Erro ao criar usuário. Por favor, tente novamente.')
         } else if (err.message?.includes('User already registered')) {
           setError('Este e-mail já está registrado')
         } else {
-          setError('Falha ao criar conta. Por favor, tente novamente.')
+          setError(`Falha ao criar conta: ${err.message || 'Erro desconhecido'}`)
         }
       }
     } catch (err) {
+      console.error('Unexpected error:', err)
       setError('Erro inesperado. Por favor, tente novamente.')
     } finally {
       setLoading(false)
     }
+  }
+
+  const togglePasswordVisibility = () => {
+    setShowPassword((prev) => !prev)
   }
 
   return (
@@ -89,7 +124,8 @@ export function Register() {
         <div className="bg-white px-4 py-6 sm:py-8 shadow sm:rounded-lg sm:px-10">
           <form className="space-y-4 sm:space-y-6" onSubmit={handleSubmit}>
             {error && (
-              <div className="rounded-md bg-red-50 p-3 sm:p-4">
+              <div className="rounded-md bg-red-50 p-3 sm:p-4 flex items-start">
+                <AlertCircle className="w-5 h-5 text-red-400 mr-2 flex-shrink-0 mt-0.5" />
                 <p className="text-sm text-red-700">{error}</p>
               </div>
             )}
@@ -136,7 +172,7 @@ export function Register() {
                   validateLinkedinUrl(e.target.value)
                 }}
                 placeholder="https://www.linkedin.com/in/seu-perfil"
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-indigo-500"
+                className={`mt-1 block w-full rounded-md border ${linkedinError ? 'border-red-300' : 'border-gray-300'} px-3 py-2 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-indigo-500`}
               />
               {linkedinError && (
                 <p className="mt-1 text-sm text-red-600">{linkedinError}</p>
@@ -151,14 +187,28 @@ export function Register() {
                 Senha
                 <span className="text-xs text-gray-500 ml-1">(mínimo 6 caracteres)</span>
               </label>
-              <input
-                id="password"
-                type="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-indigo-500"
-              />
+              <div className="relative mt-1">
+                <input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-indigo-500 pr-10"
+                />
+                <button
+                  type="button"
+                  className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600 focus:outline-none focus:text-gray-600"
+                  onClick={togglePasswordVisibility}
+                  aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-5 w-5" aria-hidden="true" />
+                  ) : (
+                    <Eye className="h-5 w-5" aria-hidden="true" />
+                  )}
+                </button>
+              </div>
             </div>
 
             <button

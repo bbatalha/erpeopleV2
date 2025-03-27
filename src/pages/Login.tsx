@@ -104,6 +104,15 @@ export function Login() {
               </div>
             </div>
 
+            <div className="text-right">
+              <Link
+                to="/forgot-password"
+                className="text-sm font-medium text-indigo-600 hover:text-indigo-500"
+              >
+                Esqueceu sua senha?
+              </Link>
+            </div>
+
             <button
               type="submit"
               disabled={loading}
@@ -118,12 +127,6 @@ export function Login() {
               Não tem uma conta?{' '}
               <Link to="/register" className="font-medium text-indigo-600 hover:text-indigo-500">
                 Registre-se aqui
-              </Link>
-            </p>
-            <p>
-              Esqueceu sua senha?{' '}
-              <Link to="/forgot-password" className="font-medium text-indigo-600 hover:text-indigo-500">
-                Recuperar senha
               </Link>
             </p>
           </div>

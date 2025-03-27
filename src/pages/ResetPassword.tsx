@@ -1,417 +1,255 @@
-import React, { useState, useEffect, useMemo } from 'react'
-import { supabase } from '../lib/supabase'
-import { Users, FileText, Search, Download, Trash2, Edit, TrendingUp, TrendingDown, Minus, BarChart2, Brain, Shield, Settings, Activity } from 'lucide-react'
-import {
-  Box,
-  Paper,
-  Typography,
-  TextField,
-  Button,
-  IconButton,
-  Tooltip,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Snackbar,
-  Alert,
-  Chip,
-  Stack,
-  Divider,
-  Grid
-} from '@mui/material'
-import { DataGrid, GridColDef } from '@mui/x-data-grid'
-import { useAuth } from '../contexts/AuthContext'
+import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns'
-import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers'
-import { UserEditDialog } from '../components/UserEditDialog'
-import { UserRoleDialog } from '../components/UserRoleDialog'
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts'
-import { calculateDISCResults } from '../utils/discCalculator'
+import { Brain, Eye, EyeOff, CheckCircle, XCircle, ShieldCheck } from 'lucide-react'
+import { supabase } from '../lib/supabase'
+import { toast } from 'react-hot-toast'
 
-interface Stats {
-  totalUsers: number;
-  totalAssessments: number;
-}
-
-export function AdminDashboard() {
-  const { user } = useAuth()
-  const navigate = useNavigate()
-  const [users, setUsers] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
-  const [searchTerm, setSearchTerm] = useState('')
-  const [selectedUsers, setSelectedUsers] = useState<string[]>([])
-  const [totalUsers, setTotalUsers] = useState(0)
-  const [page, setPage] = useState(0)
-  const [pageSize, setPageSize] = useState(10)
-  const [dateRange, setDateRange] = useState<[Date | null, Date | null]>([null, null])
-  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' })
-  const [deleteDialog, setDeleteDialog] = useState({ open: false, userId: '' })
-  const [userDetailsDialog, setUserDetailsDialog] = useState({ open: false, user: null })
-  const [editDialog, setEditDialog] = useState({ open: false, userId: '' })
-  const [roleDialog, setRoleDialog] = useState({ open: false, user: null })
-  const [fetchUsers, setFetchUsers] = useState(0)
-  const [stats, setStats] = useState<Stats>({
-    totalUsers: 0,
-    totalAssessments: 0
+export function ResetPassword() {
+  const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+  const [passwordValidation, setPasswordValidation] = useState({
+    length: false,
+    hasLetter: false,
+    hasNumber: false,
+    hasSpecial: false
   })
+  const [resetSuccess, setResetSuccess] = useState(false)
+  const navigate = useNavigate()
 
-  // Fetch stats
+  // Check for hash param in the URL coming from Supabase auth link
   useEffect(() => {
-    async function fetchStats() {
-      try {
-        // Get total users and assessments in parallel
-        const [usersResult, assessmentsResult] = await Promise.all([
-          supabase
-            .from('profiles')
-            .select('id, role'),
-          supabase
-            .from('assessment_responses')
-            .select(`
-              id,
-              status,
-              user_id,
-              assessments!inner (
-                type
-              )
-            `)
-            .eq('status', 'completed')
-        ])
-
-        if (usersResult.error) throw usersResult.error
-        if (assessmentsResult.error) throw assessmentsResult.error
-
-        setStats({
-          totalUsers: usersResult.data?.length || 0,
-          totalAssessments: assessmentsResult.data?.length || 0
-        })
-
-        console.log('Total assessments:', assessmentsResult.data?.length)
-        console.log('Assessment data:', assessmentsResult.data)
-      } catch (error) {
-        console.error('Error fetching stats:', error)
-        setStats({
-          totalUsers: 0,
-          totalAssessments: 0
-        })
+    const handleHashChange = async () => {
+      // Handle the hash from the URL - Supabase auth puts the token here
+      const hash = window.location.hash
+      if (hash && hash.includes('type=recovery')) {
+        console.log('Recovery hash detected')
+        // We don't need to do anything specific here as Supabase handles the token
       }
     }
 
-    fetchStats()
-  }, [fetchUsers])
+    handleHashChange()
+    
+    // Listen for hash changes (though not typically needed for password reset flow)
+    window.addEventListener('hashchange', handleHashChange)
+    return () => {
+      window.removeEventListener('hashchange', handleHashChange)
+    }
+  }, [])
 
+  // Validate password as user types
   useEffect(() => {
-    async function fetchUsers() {
-      if (!user) return
-      
-      setLoading(true)
-      try {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select(`
-            *,
-            assessment_responses (
-              id,
-              status,
-              created_at,
-              assessments!inner (
-                type,
-                title
-              )
-            )
-          `)
-          .order('created_at', { ascending: false })
-
-        if (error) throw error
-        console.log('Users with assessments:', data)
-        setUsers(data || [])
-      } catch (err) {
-        console.error('Error fetching users:', err)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchUsers()
-  }, [user, fetchUsers])
-
-  const handleDeleteUser = async (userId: string) => {
-    try {
-      const { error } = await supabase
-        .from('profiles')
-        .delete()
-        .eq('id', userId)
-
-      if (error) throw error
-
-      setUsers(prev => prev.filter(u => u.id !== userId))
-      showSnackbar('User deleted successfully', 'success')
-    } catch (err) {
-      console.error('Error deleting user:', err)
-      showSnackbar('Error deleting user', 'error')
-    }
-  }
-
-  const showSnackbar = (message: string, severity: 'success' | 'error' = 'success') => {
-    setSnackbar({
-      open: true,
-      message,
-      severity
+    setPasswordValidation({
+      length: password.length >= 8,
+      hasLetter: /[a-zA-Z]/.test(password),
+      hasNumber: /[0-9]/.test(password),
+      hasSpecial: /[!@#$%^&*(),.?":{}|<>]/.test(password)
     })
+  }, [password])
+
+  const validatePasswords = () => {
+    if (password !== confirmPassword) {
+      setError('As senhas não coincidem.')
+      return false
+    }
+    
+    if (!passwordValidation.length || !passwordValidation.hasLetter || 
+        !passwordValidation.hasNumber || !passwordValidation.hasSpecial) {
+      setError('A senha não atende aos requisitos mínimos de segurança.')
+      return false
+    }
+    
+    return true
   }
 
-  const columns: GridColDef[] = useMemo(() => [
-    {
-      field: 'full_name',
-      headerName: 'Nome',
-      flex: 1,
-      minWidth: 200
-    },
-    {
-      field: 'email',
-      headerName: 'Email',
-      flex: 1,
-      minWidth: 200
-    },
-    {
-      field: 'role',
-      headerName: 'Role',
-      width: 120,
-      renderCell: (params) => (
-        <Chip
-          label={params.value === 'admin' ? 'Admin' : 'User'}
-          color={params.value === 'admin' ? 'error' : 'default'}
-          size="small"
-        />
-      )
-    },
-    {
-      field: 'created_at',
-      headerName: 'Created',
-      width: 180,
-      valueFormatter: (params) => 
-        new Date(params.value).toLocaleDateString('pt-BR', {
-          day: '2-digit',
-          month: 'short',
-          year: 'numeric'
-        })
-    },
-    {
-      field: 'actions',
-      headerName: 'Ações',
-      width: 380,
-      align: 'center',
-      headerAlign: 'center',
-      renderCell: (params) => (
-        <Stack 
-          direction="row" 
-          spacing={1} 
-          alignItems="center"
-          justifyContent="center"
-          sx={{ width: '100%' }}
-        >
-          <Tooltip title="Edit User">
-            <IconButton
-              size="small"
-              onClick={() => setEditDialog({ open: true, userId: params.row.id })}
-            >
-              <Edit className="w-4 h-4" />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title="Manage Admin Access">
-            <IconButton
-              size="small"
-              aria-label="Gerenciar Acesso Admin"
-              onClick={() => setRoleDialog({ open: true, user: params.row })}
-            >
-              <Shield className={params.row.role === 'admin' ? 'text-red-600' : 'text-gray-400'} />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title="DISC Reports">
-            <IconButton
-              size="small"
-              onClick={() => navigate(`/admin/users/${params.row.id}/disc-reports`)}
-            >
-              <Brain className="w-4 h-4" />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title="Behavior Reports">
-            <IconButton
-              size="small"
-              onClick={() => navigate(`/admin/users/${params.row.id}/behavior-reports`)}
-            >
-              <Activity className="w-4 h-4" />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title="DISC Reports">
-            <IconButton
-              size="small"
-              onClick={() => navigate(`/admin/users/${params.row.id}/disc-reports`)}
-            >
-              <Brain className="w-4 h-4" />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title="Behavior Reports">
-            <IconButton
-              size="small"
-              onClick={() => navigate(`/admin/users/${params.row.id}/behavior-reports`)}
-            >
-              <Activity className="w-4 h-4" />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title="DISC Reports">
-            <IconButton
-              size="small"
-              onClick={() => navigate(`/admin/users/${params.row.id}/disc-reports`)}
-            >
-              <Brain className="w-4 h-4" />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title="Behavior Reports">
-            <IconButton
-              size="small"
-              onClick={() => navigate(`/admin/users/${params.row.id}/behavior-reports`)}
-            >
-              <Activity className="w-4 h-4" />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title="Delete User">
-            <IconButton
-              size="small"
-              onClick={() => setDeleteDialog({ open: true, userId: params.row.id })}
-            >
-              <Trash2 className="w-4 h-4" />
-            </IconButton>
-          </Tooltip>
-        </Stack>
-      )
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    
+    if (!validatePasswords()) {
+      return
     }
-  ], [])
+    
+    setLoading(true)
+    setError('')
+    
+    try {
+      // Update the user's password
+      const { error } = await supabase.auth.updateUser({
+        password
+      })
+      
+      if (error) throw error
+      
+      // Show success state
+      setResetSuccess(true)
+      toast.success('Senha atualizada com sucesso!')
+      
+      // Redirect to login after a short delay
+      setTimeout(() => {
+        navigate('/login')
+      }, 3000)
+    } catch (err: any) {
+      console.error('Error resetting password:', err)
+      setError(
+        err.message === 'Invalid login credentials'
+          ? 'O link de recuperação expirou ou é inválido. Por favor, solicite um novo link.'
+          : 'Ocorreu um erro ao redefinir sua senha. Por favor, tente novamente.'
+      )
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const togglePasswordVisibility = () => {
+    setShowPassword((prev) => !prev)
+  }
 
   return (
-    <Box sx={{ maxWidth: 1400, margin: '0 auto', padding: 3 }}>
-      <Stack direction="row" justifyContent="space-between" alignItems="center" mb={3}>
-        <Typography variant="h4" gutterBottom>
-          Admin Dashboard
-        </Typography>
-      </Stack>
+    <div className="flex min-h-[80vh] flex-col justify-center py-6 sm:py-12 px-4 sm:px-6 lg:px-8">
+      <div className="sm:mx-auto sm:w-full sm:max-w-md">
+        <div className="flex justify-center">
+          <Brain className="w-10 h-10 sm:w-12 sm:h-12 text-indigo-600" />
+        </div>
+        <h2 className="mt-4 sm:mt-6 text-center text-2xl sm:text-3xl font-bold tracking-tight text-gray-900">
+          {resetSuccess ? 'Senha redefinida!' : 'Criar nova senha'}
+        </h2>
+      </div>
 
-      <Box sx={{ mb: 4 }}>
-        <Grid container spacing={3}>
-          <Grid item xs={12} sm={4}>
-            <Paper sx={{ p: 3 }}>
-              <Stack direction="row" spacing={2} alignItems="center">
-                <Users className="w-8 h-8 text-indigo-600" />
-                <Box>
-                  <Typography variant="h6">{stats.totalUsers}</Typography>
-                  <Typography color="text.secondary">Total Users</Typography>
-                </Box>
-              </Stack>
-            </Paper>
-          </Grid>
-          <Grid item xs={12} sm={4}>
-            <Paper sx={{ p: 3 }}>
-              <Stack direction="row" spacing={2} alignItems="center">
-                <Brain className="w-8 h-8 text-indigo-600" />
-                <Box>
-                  <Typography variant="h6">{stats.totalAssessments}</Typography>
-                  <Typography color="text.secondary">Completed Assessments</Typography>
-                </Box>
-              </Stack>
-            </Paper>
-          </Grid>
-        </Grid>
-      </Box>
+      <div className="mt-6 sm:mt-8 sm:mx-auto sm:w-full sm:max-w-md">
+        <div className="bg-white px-4 py-6 sm:py-8 shadow sm:rounded-lg sm:px-10">
+          {resetSuccess ? (
+            <div className="text-center space-y-6">
+              <div className="mx-auto w-16 h-16 flex items-center justify-center rounded-full bg-green-100">
+                <CheckCircle className="w-8 h-8 text-green-600" />
+              </div>
+              <p className="text-gray-700">
+                Sua senha foi redefinida com sucesso! Você será redirecionado para a página de login em instantes.
+              </p>
+              <button
+                onClick={() => navigate('/login')}
+                className="w-full rounded-md bg-indigo-600 px-3.5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+              >
+                Ir para o login
+              </button>
+            </div>
+          ) : (
+            <form className="space-y-6" onSubmit={handleSubmit}>
+              <div>
+                <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+                  Nova senha
+                </label>
+                <div className="relative mt-1">
+                  <input
+                    id="password"
+                    type={showPassword ? "text" : "password"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    className="block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-indigo-500 pr-10"
+                  />
+                  <button
+                    type="button"
+                    className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600 focus:outline-none focus:text-gray-600"
+                    onClick={togglePasswordVisibility}
+                  >
+                    {showPassword ? (
+                      <EyeOff className="h-5 w-5" aria-hidden="true" />
+                    ) : (
+                      <Eye className="h-5 w-5" aria-hidden="true" />
+                    )}
+                  </button>
+                </div>
+              </div>
 
-      <Paper sx={{ width: '100%', mb: 2 }}>
-        <Box sx={{ p: 2 }}>
-          <Stack direction="row" justifyContent="space-between" alignItems="center">
-            <Typography variant="h6">Users</Typography>
-            <TextField
-              size="small"
-              placeholder="Search users..."
-              InputProps={{
-                startAdornment: <Search className="w-4 h-4 text-gray-400 mr-2" />
-              }}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </Stack>
-        </Box>
-        <DataGrid
-          rows={users}
-          columns={columns}
-          pageSize={pageSize}
-          rowsPerPageOptions={[5, 10, 25]}
-          checkboxSelection
-          disableSelectionOnClick
-          autoHeight
-          loading={loading}
-          onPageSizeChange={(newPageSize) => setPageSize(newPageSize)}
-          onPageChange={(newPage) => setPage(newPage)}
-          components={{
-            Toolbar: () => null
-          }}
-        />
-      </Paper>
+              <div>
+                <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">
+                  Confirme a nova senha
+                </label>
+                <div className="relative mt-1">
+                  <input
+                    id="confirmPassword"
+                    type={showPassword ? "text" : "password"}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    required
+                    className="block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-indigo-500 pr-10"
+                  />
+                  <button
+                    type="button"
+                    className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600 focus:outline-none focus:text-gray-600"
+                    onClick={togglePasswordVisibility}
+                  >
+                    {showPassword ? (
+                      <EyeOff className="h-5 w-5" aria-hidden="true" />
+                    ) : (
+                      <Eye className="h-5 w-5" aria-hidden="true" />
+                    )}
+                  </button>
+                </div>
+              </div>
 
-      <UserEditDialog
-        open={editDialog.open}
-        onClose={() => setEditDialog({ open: false, userId: '' })}
-        userId={editDialog.userId}
-        onSuccess={() => {
-          showSnackbar('User updated successfully')
-          setFetchUsers(prev => prev + 1)
-        }}
-      />
+              <div className="rounded-md bg-blue-50 p-4">
+                <div className="flex">
+                  <div className="flex-shrink-0">
+                    <ShieldCheck className="h-5 w-5 text-blue-400" aria-hidden="true" />
+                  </div>
+                  <div className="ml-3">
+                    <h3 className="text-sm font-medium text-blue-800">Requisitos de senha</h3>
+                    <div className="mt-2 text-sm text-blue-700">
+                      <ul className="list-disc space-y-1 pl-5">
+                        <li className={passwordValidation.length ? 'text-green-600' : ''}>
+                          Mínimo de 8 caracteres
+                          {passwordValidation.length && <CheckCircle className="inline-block w-4 h-4 ml-1" />}
+                        </li>
+                        <li className={passwordValidation.hasLetter ? 'text-green-600' : ''}>
+                          Pelo menos uma letra
+                          {passwordValidation.hasLetter && <CheckCircle className="inline-block w-4 h-4 ml-1" />}
+                        </li>
+                        <li className={passwordValidation.hasNumber ? 'text-green-600' : ''}>
+                          Pelo menos um número
+                          {passwordValidation.hasNumber && <CheckCircle className="inline-block w-4 h-4 ml-1" />}
+                        </li>
+                        <li className={passwordValidation.hasSpecial ? 'text-green-600' : ''}>
+                          Pelo menos um caractere especial
+                          {passwordValidation.hasSpecial && <CheckCircle className="inline-block w-4 h-4 ml-1" />}
+                        </li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </div>
 
-      <UserRoleDialog
-        open={roleDialog.open}
-        onClose={() => setRoleDialog({ open: false, user: null })}
-        user={roleDialog.user}
-        onSuccess={() => {
-          showSnackbar('Permissions updated successfully')
-          setFetchUsers(prev => prev + 1)
-        }}
-      />
+              {error && (
+                <div className="rounded-md bg-red-50 p-4">
+                  <div className="flex">
+                    <div className="flex-shrink-0">
+                      <XCircle className="h-5 w-5 text-red-400" aria-hidden="true" />
+                    </div>
+                    <div className="ml-3">
+                      <h3 className="text-sm font-medium text-red-800">Erro</h3>
+                      <div className="mt-2 text-sm text-red-700">
+                        <p>{error}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
 
-      <Dialog
-        open={deleteDialog.open}
-        onClose={() => setDeleteDialog({ open: false, userId: '' })}
-      >
-        <DialogTitle>Confirm Delete</DialogTitle>
-        <DialogContent>
-          <Typography>Are you sure you want to delete this user?</Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeleteDialog({ open: false, userId: '' })}>
-            Cancel
-          </Button>
-          <Button
-            onClick={() => {
-              handleDeleteUser(deleteDialog.userId)
-              setDeleteDialog({ open: false, userId: '' })
-            }}
-            color="error"
-          >
-            Delete
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      <Snackbar
-        open={snackbar.open}
-        autoHideDuration={6000}
-        onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
-      >
-        <Alert
-          onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
-          severity={snackbar.severity as 'success' | 'error'}
-          sx={{ width: '100%' }}
-        >
-          {snackbar.message}
-        </Alert>
-      </Snackbar>
-    </Box>
+              <div>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full rounded-md bg-indigo-600 px-3.5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {loading ? 'Redefinindo...' : 'Redefinir senha'}
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
+      </div>
+    </div>
   )
 }

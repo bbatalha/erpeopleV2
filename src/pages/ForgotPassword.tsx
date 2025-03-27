@@ -1,417 +1,133 @@
-import React, { useState, useEffect, useMemo } from 'react'
-import { supabase } from '../lib/supabase'
-import { Users, FileText, Search, Download, Trash2, Edit, TrendingUp, TrendingDown, Minus, BarChart2, Brain, Shield, Settings, Activity } from 'lucide-react'
-import {
-  Box,
-  Paper,
-  Typography,
-  TextField,
-  Button,
-  IconButton,
-  Tooltip,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Snackbar,
-  Alert,
-  Chip,
-  Stack,
-  Divider,
-  Grid
-} from '@mui/material'
-import { DataGrid, GridColDef } from '@mui/x-data-grid'
+import React, { useState } from 'react'
+import { Link } from 'react-router-dom'
+import { Brain, ArrowLeft, Mail, AlertTriangle } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
-import { useNavigate } from 'react-router-dom'
-import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns'
-import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers'
-import { UserEditDialog } from '../components/UserEditDialog'
-import { UserRoleDialog } from '../components/UserRoleDialog'
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts'
-import { calculateDISCResults } from '../utils/discCalculator'
+import { toast } from 'react-hot-toast'
 
-interface Stats {
-  totalUsers: number;
-  totalAssessments: number;
-}
+export function ForgotPassword() {
+  const [email, setEmail] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [emailSent, setEmailSent] = useState(false)
+  const [error, setError] = useState('')
+  const { resetPassword } = useAuth()
 
-export function AdminDashboard() {
-  const { user } = useAuth()
-  const navigate = useNavigate()
-  const [users, setUsers] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
-  const [searchTerm, setSearchTerm] = useState('')
-  const [selectedUsers, setSelectedUsers] = useState<string[]>([])
-  const [totalUsers, setTotalUsers] = useState(0)
-  const [page, setPage] = useState(0)
-  const [pageSize, setPageSize] = useState(10)
-  const [dateRange, setDateRange] = useState<[Date | null, Date | null]>([null, null])
-  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' })
-  const [deleteDialog, setDeleteDialog] = useState({ open: false, userId: '' })
-  const [userDetailsDialog, setUserDetailsDialog] = useState({ open: false, user: null })
-  const [editDialog, setEditDialog] = useState({ open: false, userId: '' })
-  const [roleDialog, setRoleDialog] = useState({ open: false, user: null })
-  const [fetchUsers, setFetchUsers] = useState(0)
-  const [stats, setStats] = useState<Stats>({
-    totalUsers: 0,
-    totalAssessments: 0
-  })
-
-  // Fetch stats
-  useEffect(() => {
-    async function fetchStats() {
-      try {
-        // Get total users and assessments in parallel
-        const [usersResult, assessmentsResult] = await Promise.all([
-          supabase
-            .from('profiles')
-            .select('id, role'),
-          supabase
-            .from('assessment_responses')
-            .select(`
-              id,
-              status,
-              user_id,
-              assessments!inner (
-                type
-              )
-            `)
-            .eq('status', 'completed')
-        ])
-
-        if (usersResult.error) throw usersResult.error
-        if (assessmentsResult.error) throw assessmentsResult.error
-
-        setStats({
-          totalUsers: usersResult.data?.length || 0,
-          totalAssessments: assessmentsResult.data?.length || 0
-        })
-
-        console.log('Total assessments:', assessmentsResult.data?.length)
-        console.log('Assessment data:', assessmentsResult.data)
-      } catch (error) {
-        console.error('Error fetching stats:', error)
-        setStats({
-          totalUsers: 0,
-          totalAssessments: 0
-        })
-      }
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    
+    // Email validation
+    if (!email || !email.match(/^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/)) {
+      setError('Por favor, insira um endereço de e-mail válido.')
+      return
     }
 
-    fetchStats()
-  }, [fetchUsers])
+    setLoading(true)
+    setError('')
 
-  useEffect(() => {
-    async function fetchUsers() {
-      if (!user) return
-      
-      setLoading(true)
-      try {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select(`
-            *,
-            assessment_responses (
-              id,
-              status,
-              created_at,
-              assessments!inner (
-                type,
-                title
-              )
-            )
-          `)
-          .order('created_at', { ascending: false })
-
-        if (error) throw error
-        console.log('Users with assessments:', data)
-        setUsers(data || [])
-      } catch (err) {
-        console.error('Error fetching users:', err)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchUsers()
-  }, [user, fetchUsers])
-
-  const handleDeleteUser = async (userId: string) => {
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .delete()
-        .eq('id', userId)
-
-      if (error) throw error
-
-      setUsers(prev => prev.filter(u => u.id !== userId))
-      showSnackbar('User deleted successfully', 'success')
-    } catch (err) {
-      console.error('Error deleting user:', err)
-      showSnackbar('Error deleting user', 'error')
+      await resetPassword(email)
+      setEmailSent(true)
+      toast.success('Email de recuperação enviado com sucesso!', {
+        duration: 5000,
+      })
+    } catch (err: any) {
+      console.error('Error sending reset password email:', err)
+      
+      // Use a generic error message for security
+      setError(
+        'Não foi possível enviar o email de recuperação. Por favor, verifique o endereço de email e tente novamente mais tarde.'
+      )
+      
+      // Show more detailed toast for debugging
+      toast.error('Erro ao enviar email de recuperação', {
+        duration: 5000,
+      })
+    } finally {
+      setLoading(false)
     }
   }
-
-  const showSnackbar = (message: string, severity: 'success' | 'error' = 'success') => {
-    setSnackbar({
-      open: true,
-      message,
-      severity
-    })
-  }
-
-  const columns: GridColDef[] = useMemo(() => [
-    {
-      field: 'full_name',
-      headerName: 'Nome',
-      flex: 1,
-      minWidth: 200
-    },
-    {
-      field: 'email',
-      headerName: 'Email',
-      flex: 1,
-      minWidth: 200
-    },
-    {
-      field: 'role',
-      headerName: 'Role',
-      width: 120,
-      renderCell: (params) => (
-        <Chip
-          label={params.value === 'admin' ? 'Admin' : 'User'}
-          color={params.value === 'admin' ? 'error' : 'default'}
-          size="small"
-        />
-      )
-    },
-    {
-      field: 'created_at',
-      headerName: 'Created',
-      width: 180,
-      valueFormatter: (params) => 
-        new Date(params.value).toLocaleDateString('pt-BR', {
-          day: '2-digit',
-          month: 'short',
-          year: 'numeric'
-        })
-    },
-    {
-      field: 'actions',
-      headerName: 'Ações',
-      width: 380,
-      align: 'center',
-      headerAlign: 'center',
-      renderCell: (params) => (
-        <Stack 
-          direction="row" 
-          spacing={1} 
-          alignItems="center"
-          justifyContent="center"
-          sx={{ width: '100%' }}
-        >
-          <Tooltip title="Edit User">
-            <IconButton
-              size="small"
-              onClick={() => setEditDialog({ open: true, userId: params.row.id })}
-            >
-              <Edit className="w-4 h-4" />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title="Manage Admin Access">
-            <IconButton
-              size="small"
-              aria-label="Gerenciar Acesso Admin"
-              onClick={() => setRoleDialog({ open: true, user: params.row })}
-            >
-              <Shield className={params.row.role === 'admin' ? 'text-red-600' : 'text-gray-400'} />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title="DISC Reports">
-            <IconButton
-              size="small"
-              onClick={() => navigate(`/admin/users/${params.row.id}/disc-reports`)}
-            >
-              <Brain className="w-4 h-4" />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title="Behavior Reports">
-            <IconButton
-              size="small"
-              onClick={() => navigate(`/admin/users/${params.row.id}/behavior-reports`)}
-            >
-              <Activity className="w-4 h-4" />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title="DISC Reports">
-            <IconButton
-              size="small"
-              onClick={() => navigate(`/admin/users/${params.row.id}/disc-reports`)}
-            >
-              <Brain className="w-4 h-4" />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title="Behavior Reports">
-            <IconButton
-              size="small"
-              onClick={() => navigate(`/admin/users/${params.row.id}/behavior-reports`)}
-            >
-              <Activity className="w-4 h-4" />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title="DISC Reports">
-            <IconButton
-              size="small"
-              onClick={() => navigate(`/admin/users/${params.row.id}/disc-reports`)}
-            >
-              <Brain className="w-4 h-4" />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title="Behavior Reports">
-            <IconButton
-              size="small"
-              onClick={() => navigate(`/admin/users/${params.row.id}/behavior-reports`)}
-            >
-              <Activity className="w-4 h-4" />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title="Delete User">
-            <IconButton
-              size="small"
-              onClick={() => setDeleteDialog({ open: true, userId: params.row.id })}
-            >
-              <Trash2 className="w-4 h-4" />
-            </IconButton>
-          </Tooltip>
-        </Stack>
-      )
-    }
-  ], [])
 
   return (
-    <Box sx={{ maxWidth: 1400, margin: '0 auto', padding: 3 }}>
-      <Stack direction="row" justifyContent="space-between" alignItems="center" mb={3}>
-        <Typography variant="h4" gutterBottom>
-          Admin Dashboard
-        </Typography>
-      </Stack>
+    <div className="flex min-h-[80vh] flex-col justify-center py-6 sm:py-12 px-4 sm:px-6 lg:px-8">
+      <div className="sm:mx-auto sm:w-full sm:max-w-md">
+        <div className="flex justify-center">
+          <Brain className="w-10 h-10 sm:w-12 sm:h-12 text-indigo-600" />
+        </div>
+        <h2 className="mt-4 sm:mt-6 text-center text-2xl sm:text-3xl font-bold tracking-tight text-gray-900">
+          {emailSent ? 'Email enviado!' : 'Recuperar senha'}
+        </h2>
+      </div>
 
-      <Box sx={{ mb: 4 }}>
-        <Grid container spacing={3}>
-          <Grid item xs={12} sm={4}>
-            <Paper sx={{ p: 3 }}>
-              <Stack direction="row" spacing={2} alignItems="center">
-                <Users className="w-8 h-8 text-indigo-600" />
-                <Box>
-                  <Typography variant="h6">{stats.totalUsers}</Typography>
-                  <Typography color="text.secondary">Total Users</Typography>
-                </Box>
-              </Stack>
-            </Paper>
-          </Grid>
-          <Grid item xs={12} sm={4}>
-            <Paper sx={{ p: 3 }}>
-              <Stack direction="row" spacing={2} alignItems="center">
-                <Brain className="w-8 h-8 text-indigo-600" />
-                <Box>
-                  <Typography variant="h6">{stats.totalAssessments}</Typography>
-                  <Typography color="text.secondary">Completed Assessments</Typography>
-                </Box>
-              </Stack>
-            </Paper>
-          </Grid>
-        </Grid>
-      </Box>
+      <div className="mt-6 sm:mt-8 sm:mx-auto sm:w-full sm:max-w-md">
+        <div className="bg-white px-4 py-6 sm:py-8 shadow sm:rounded-lg sm:px-10">
+          {emailSent ? (
+            <div className="text-center space-y-6">
+              <div className="mx-auto w-16 h-16 flex items-center justify-center rounded-full bg-green-100">
+                <Mail className="w-8 h-8 text-green-600" />
+              </div>
+              <div className="space-y-3">
+                <p className="text-gray-700">
+                  Enviamos um email com instruções para redefinir sua senha para:
+                </p>
+                <p className="font-medium text-gray-900">{email}</p>
+                <p className="text-sm text-gray-500 mt-2">
+                  Se você não receber o email em alguns minutos, verifique sua pasta de spam ou tente novamente.
+                </p>
+              </div>
+              <div className="pt-4">
+                <Link
+                  to="/login"
+                  className="inline-flex items-center text-indigo-600 hover:text-indigo-500"
+                >
+                  <ArrowLeft className="w-4 h-4 mr-2" />
+                  Voltar para o login
+                </Link>
+              </div>
+            </div>
+          ) : (
+            <form className="space-y-6" onSubmit={handleSubmit}>
+              <div>
+                <p className="text-sm text-gray-600 mb-4">
+                  Insira seu endereço de e-mail abaixo e enviaremos um link para redefinir sua senha.
+                </p>
+                <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+                  E-mail
+                </label>
+                <input
+                  id="email"
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-indigo-500"
+                  placeholder="seu@email.com"
+                />
+              </div>
 
-      <Paper sx={{ width: '100%', mb: 2 }}>
-        <Box sx={{ p: 2 }}>
-          <Stack direction="row" justifyContent="space-between" alignItems="center">
-            <Typography variant="h6">Users</Typography>
-            <TextField
-              size="small"
-              placeholder="Search users..."
-              InputProps={{
-                startAdornment: <Search className="w-4 h-4 text-gray-400 mr-2" />
-              }}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </Stack>
-        </Box>
-        <DataGrid
-          rows={users}
-          columns={columns}
-          pageSize={pageSize}
-          rowsPerPageOptions={[5, 10, 25]}
-          checkboxSelection
-          disableSelectionOnClick
-          autoHeight
-          loading={loading}
-          onPageSizeChange={(newPageSize) => setPageSize(newPageSize)}
-          onPageChange={(newPage) => setPage(newPage)}
-          components={{
-            Toolbar: () => null
-          }}
-        />
-      </Paper>
+              {error && (
+                <div className="rounded-md bg-red-50 p-3">
+                  <p className="text-sm text-red-700">{error}</p>
+                </div>
+              )}
 
-      <UserEditDialog
-        open={editDialog.open}
-        onClose={() => setEditDialog({ open: false, userId: '' })}
-        userId={editDialog.userId}
-        onSuccess={() => {
-          showSnackbar('User updated successfully')
-          setFetchUsers(prev => prev + 1)
-        }}
-      />
-
-      <UserRoleDialog
-        open={roleDialog.open}
-        onClose={() => setRoleDialog({ open: false, user: null })}
-        user={roleDialog.user}
-        onSuccess={() => {
-          showSnackbar('Permissions updated successfully')
-          setFetchUsers(prev => prev + 1)
-        }}
-      />
-
-      <Dialog
-        open={deleteDialog.open}
-        onClose={() => setDeleteDialog({ open: false, userId: '' })}
-      >
-        <DialogTitle>Confirm Delete</DialogTitle>
-        <DialogContent>
-          <Typography>Are you sure you want to delete this user?</Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeleteDialog({ open: false, userId: '' })}>
-            Cancel
-          </Button>
-          <Button
-            onClick={() => {
-              handleDeleteUser(deleteDialog.userId)
-              setDeleteDialog({ open: false, userId: '' })
-            }}
-            color="error"
-          >
-            Delete
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      <Snackbar
-        open={snackbar.open}
-        autoHideDuration={6000}
-        onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
-      >
-        <Alert
-          onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
-          severity={snackbar.severity as 'success' | 'error'}
-          sx={{ width: '100%' }}
-        >
-          {snackbar.message}
-        </Alert>
-      </Snackbar>
-    </Box>
+              <div className="flex flex-col space-y-3 sm:flex-row sm:space-y-0 sm:justify-between items-center">
+                <Link
+                  to="/login"
+                  className="text-sm font-medium text-indigo-600 hover:text-indigo-500"
+                >
+                  Voltar para o login
+                </Link>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="inline-flex justify-center rounded-md border border-transparent bg-indigo-600 py-2 px-4 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {loading ? 'Enviando...' : 'Enviar email de recuperação'}
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
+      </div>
+    </div>
   )
 }

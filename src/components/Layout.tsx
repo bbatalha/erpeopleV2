@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { useLocation } from 'react-router-dom'
 import { SidebarMenu } from './SidebarMenu'
 import { Menu } from 'lucide-react'
+import { useAuth } from '../contexts/AuthContext'
 
 interface LayoutProps {
   children: React.ReactNode
@@ -9,9 +10,16 @@ interface LayoutProps {
 
 export function Layout({ children }: LayoutProps) {
   const location = useLocation()
-  const isPublicPage = ['/', '/login', '/register'].includes(location.pathname)
+  const { user } = useAuth()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
+
+  // Define public routes that shouldn't show the sidebar
+  const publicRoutes = ['/', '/login', '/register', '/forgot-password', '/reset-password']
+  const isPublicPage = publicRoutes.includes(location.pathname)
+  
+  // Only show sidebar for authenticated users and non-public pages
+  const showSidebar = user !== null && !isPublicPage
 
   // Handle responsive sidebar based on screen size
   useEffect(() => {
@@ -63,7 +71,7 @@ export function Layout({ children }: LayoutProps) {
 
   return (
     <div className="min-h-screen bg-gray-50 flex relative">
-      {!isPublicPage && (
+      {showSidebar && (
         <>
           <SidebarMenu open={sidebarOpen} setOpen={setSidebarOpen} />
           
@@ -82,7 +90,7 @@ export function Layout({ children }: LayoutProps) {
       )}
       
       <div className={`flex-1 flex flex-col min-h-screen transition-all duration-300 ease-in-out ${
-        !isPublicPage && !isMobile && sidebarOpen ? 'md:ml-[300px]' : ''
+        showSidebar && !isMobile && sidebarOpen ? 'md:ml-[300px]' : ''
       }`}>
         <main className="flex-1 container mx-auto px-4 py-4 sm:py-8 overflow-y-auto">
           {children}

@@ -14,6 +14,8 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<void>
   signUp: (email: string, password: string, fullName: string, linkedinUrl: string) => Promise<void>
   signOut: () => Promise<void>
+  resetPassword: (email: string) => Promise<void>
+  updatePassword: (password: string) => Promise<void>
   isLoggingOut: boolean
 }
 
@@ -26,7 +28,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     // Check active sessions and sets the user
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+      // Handle refresh token error
+      if (error && error.message.includes('Refresh Token Not Found')) {
+        console.warn('Invalid refresh token detected, clearing session data');
+        // Clear local storage to remove invalid tokens
+        localStorage.removeItem('supabase.auth.token');
+        // Additional cleanup for any auth-related items
+        localStorage.removeItem('supabase.auth.expires_at');
+        localStorage.removeItem('supabase.auth.refresh_token');
+        setUser(null);
+        setLoading(false);
+        return;
+      }
+      
       setUser(session?.user ?? null)
       setLoading(false)
     })
@@ -157,11 +172,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
+  const resetPassword = async (email: string) => {
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      })
+
+      if (error) throw error
+    } catch (err) {
+      console.error('Error resetting password:', err)
+      throw err
+    }
+  }
+
+  const updatePassword = async (password: string) => {
+    try {
+      const { error } = await supabase.auth.updateUser({
+        password
+      })
+
+      if (error) throw error
+    } catch (err) {
+      console.error('Error updating password:', err)
+      throw err
+    }
+  }
+
   const value = {
     user,
     signIn,
     signUp,
     signOut,
+    resetPassword,
+    updatePassword,
     isLoggingOut
   }
 
